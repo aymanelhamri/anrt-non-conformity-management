@@ -1,2 +1,4 @@
 # anrt-non-conformity-management
 Application web développée dans le cadre d’un stage à l’ANRT pour digitaliser la gestion des non-conformités, des actions correctives et leur suivi.
+
+Ce projet consiste à concevoir et développer une application permettant de centraliser et digitaliser la gestion des non-conformités et des actions associées. L’application permet d’enregistrer une non-conformité, de l’associer à un processus, un type et une nature de service, de désigner un responsable, de suivre son traitement et ses échéances, et de créer des actions correctives lorsque cela est nécessaire. Elle permet également de suivre la réalisation des actions, leur clôture et la vérification de leur efficacité. Le système comprend également la gestion des utilisateurs, des demandeurs et des validations afin d’assurer un suivi structuré et traçable des différentes opérations.
