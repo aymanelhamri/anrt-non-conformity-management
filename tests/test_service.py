@@ -114,3 +114,21 @@ def test_transaction_rechecks_account_before_allocation(app, user, values, conne
     assert error.value.status == 403
     conn.rollback.assert_called_once()
     conn.commit.assert_not_called()
+
+
+def test_replay_with_different_content_is_rejected(app, user, values, connection):
+    conn, cur = connection
+    cur.fetchone.side_effect = creation_results()
+    with app.app_context():
+        token = new_submission(user)
+        nc_id, _ = create_nc(user, values, token, "127.0.0.1")
+        audit_call = next(call.args for call in cur.execute.call_args_list if "INSERT INTO journal_audit" in call.args[0])
+        conn.reset_mock()
+        cur.reset_mock()
+        cur.fetchone.side_effect = [{"acquired": 1}, {"entite_id": str(nc_id), "nouvelles_valeurs": audit_call[1][2]}]
+        with pytest.raises(FormError) as error:
+            create_nc(user, {**values, "description": "Un autre constat"}, token, "127.0.0.1")
+    assert error.value.status == 409
+    conn.commit.assert_not_called()
+    conn.rollback.assert_called_once()
+    assert not any("CALL generer_reference" in call.args[0] for call in cur.execute.call_args_list)

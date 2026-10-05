@@ -17,18 +17,23 @@ DETAIL_SELECT = """SELECT nc.*, pr.code AS processus_code, pr.nom AS processus,
     JOIN pers declarant ON declarant.matricule=nc.enregistree_par_matricule"""
 
 
-def choices(user, include_inactive=False):
+def choices(user, for_list=False):
     with cursor() as cur:
         result = {}
-        for table, columns in (("processus", "id, code, nom"), ("types_nc", "id, libelle"), ("natures_service", "id, libelle")):
-            condition = "1=1" if include_inactive and table == "processus" else "actif=TRUE"
+        tables = (("processus", "id, code, nom"),) if for_list else (
+            ("processus", "id, code, nom"), ("types_nc", "id, libelle"), ("natures_service", "id, libelle")
+        )
+        for table, columns in tables:
+            condition = "1=1" if for_list else "actif=TRUE"
             cur.execute(f"SELECT {columns} FROM {table} WHERE {condition} ORDER BY id")
             result[table] = cur.fetchall()
-        where, args = assignment_sql(user)
-        cur.execute(f"SELECT p.matricule, p.nom_prenom FROM pers p WHERE {where} ORDER BY p.nom_prenom, p.matricule", args)
-        result["responsables"] = cur.fetchall()
-        cur.execute("SELECT code, libelle FROM statuts ORDER BY code")
-        result["statuts"] = cur.fetchall()
+        if for_list:
+            cur.execute("SELECT code, libelle FROM statuts ORDER BY code")
+            result["statuts"] = cur.fetchall()
+        else:
+            where, args = assignment_sql(user)
+            cur.execute(f"SELECT p.matricule, p.nom_prenom FROM pers p WHERE {where} ORDER BY p.nom_prenom, p.matricule", args)
+            result["responsables"] = cur.fetchall()
         return result
 
 

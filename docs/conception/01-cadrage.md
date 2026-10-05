@@ -21,10 +21,12 @@ base MySQL, ni l'exécution réussie des scripts, ni l'import de données réell
 | [Documentation SQL](../../database/README.md) | Ordre d'installation et usage des tables RH et des références. |
 | [Modèle expliqué](../modele-donnees.md) | Réutilisation des tables du personnel ; selon cette documentation, aucun historique métier importé depuis l'Excel fourni. |
 
-Aucun code de frontend, backend ou authentification applicative n'est présent.
-Les tables `notifications` et `journal_audit` ne sont accompagnées d'aucun
-traitement automatique. Les écrans, permissions et transitions ne sont pas
-implémentés.
+Le premier parcours connexion, enregistrement et consultation est désormais
+implémenté en Python/Flask, avec permissions côté serveur et audit de création.
+Voir le [fonctionnement livré](../implementation.md) et les
+[vérifications exécutées](../verification.md). Les décisions métier restent
+ouvertes. Les notifications, transitions et validations métier ne sont pas
+implémentées.
 
 ## Modèle de données disponible
 

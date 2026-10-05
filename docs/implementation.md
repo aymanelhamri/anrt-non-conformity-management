@@ -4,6 +4,9 @@ Cette livraison prépare le lot A décrit dans `conception/05-lots-recette.md`.
 Elle ne vaut pas approbation des décisions métier ouvertes, ni recette MySQL
 complète. Aucun script SQL existant n'a été modifié ou exécuté sur une base métier.
 
+Pour une première lecture, commencer par le [guide stagiaire](guide-stagiaire.md).
+La [revue du projet](revue.md) explique les contrôles et les corrections ciblées.
+
 ## Choix et arborescence
 
 Python 3.12+, Flask, Jinja et PyMySQL permettent un serveur et des formulaires
@@ -199,6 +202,11 @@ une même machine doivent partager ce fichier. Pour plusieurs machines, prévoir
 un stockage de sessions partagé avant déploiement. Ne pas servir `instance/`
 comme ressource web. Aucun mot de passe, hash ou requête SQL contenant des données
 métier n'est écrit dans les logs de l'application.
+
+Chaque connexion SQLite est fermée explicitement après commit ou rollback.
+Pour afficher la liste, seules les options de filtres processus et statuts sont
+chargées ; le personnel sélectionnable et les autres référentiels ne sont lus
+que pour le formulaire de création.
 
 ## Vérifications et recette
 

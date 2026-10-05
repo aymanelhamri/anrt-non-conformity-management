@@ -4,9 +4,10 @@
 
 Les lots A/B/C organisent le travail proposé ; ils ne fixent pas les jalons
 officiels. D01 détermine l'objet du premier parcours et D02 le contenu du
-deuxième jalon. Tous les critères ci-dessous sont **à vérifier** : aucune
-application n'est encore implémentée et aucun test d'exécution SQL n'a été
-réalisé dans cette conception.
+deuxième jalon. Une première application du parcours A existe désormais.
+Des tests locaux ont été exécutés, mais aucune recette MySQL réelle n'a été
+réalisée dans cet environnement. Les critères restent à valider en recette :
+voir les [résultats et limites](../verification.md).
 
 ## Lot A proposé : enregistrer et consulter une NC
 

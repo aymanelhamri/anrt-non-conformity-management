@@ -36,3 +36,23 @@ l'arborescence, la configuration MySQL, les permissions, le lancement sous
 PowerShell, la recette et les décisions restantes. Les
 [résultats de vérification](docs/verification.md) distinguent les tests exécutés
 des contrôles MySQL restant à effectuer.
+
+## Comprendre le projet rapidement
+
+Le projet actuel utilise **Python/Flask et PyMySQL**. Il ne contient pas de
+code PHP, de PDO ni de `composer.json`.
+
+| Étape | Où regarder |
+| --- | --- |
+| 1. Point d'entrée | `wsgi.py` appelle `create_app()` dans `anrt/__init__.py`. |
+| 2. Base de données | `database/001_schema.sql` est la référence ; `anrt/db.py` ouvre MySQL. |
+| 3. Authentification | `anrt/auth.py` vérifie le matricule, le hash et les dates de validité ; `anrt/sessions.py` gère la session. |
+| 4. Permissions | `anrt/permissions.py` contrôle les opérations et les périmètres ; aucun droit métier par défaut. |
+| 5. Liste des NC | `nc_list()` dans `anrt/routes.py` appelle `list_nc()` dans `anrt/repository.py`, puis `list.html`. |
+| 6. Création NC | `nc_new()` dans `anrt/routes.py` reçoit le formulaire ; `anrt/validation.py` contrôle les champs. |
+| 7. Transaction | `create_nc()` dans `anrt/service.py` utilise une connexion pour référence, NC et audit. |
+| 8. Audit | Le même `create_nc()` insère dans `journal_audit` avant le commit. |
+| 9. Fiche détaillée | `nc_detail()` appelle `detail_nc()` dans `anrt/repository.py`, puis `detail.html`. |
+
+Pour suivre le parcours en cinq minutes : [guide stagiaire](docs/guide-stagiaire.md).
+Les constats, corrections et limites figurent dans la [revue du projet](docs/revue.md).

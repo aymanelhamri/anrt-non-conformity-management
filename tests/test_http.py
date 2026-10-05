@@ -177,3 +177,62 @@ def test_detail_and_audit_render_without_sensitive_hr_data(client, app, monkeypa
     assert "Historique" in response.text and "NC-SI-001-26" in response.text
     monkeypatch.setattr("anrt.routes.detail_nc", lambda *_: (None, []))
     assert client.get("/non-conformites/2").status_code == 404
+
+
+@pytest.mark.parametrize("path", ["/non-conformites", "/non-conformites/nouvelle", "/non-conformites/1"])
+def test_direct_access_without_authentication_redirects_to_login(client, path):
+    response = client.get(path)
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/connexion")
+
+
+def test_full_http_journey_with_database_doubles(client, app, monkeypatch, user, values):
+    """Navigation réelle dans Flask ; les appels métier MySQL sont remplacés."""
+    app.config["PERMISSIONS"] = DEMO_POLICY
+    monkeypatch.setattr("anrt.routes.authenticate", lambda m, p: user)
+    monkeypatch.setattr("anrt.auth.load_user", lambda _: dict(user))
+    monkeypatch.setattr("anrt.routes.choices", lambda *_, **__: options())
+    monkeypatch.setattr("anrt.routes.list_nc", lambda *_: {"rows": [], "total": 0, "page": 1, "pages": 1})
+    token = csrf(client)
+    response = client.post("/connexion", data={"csrf_token": token, "matricule": "00017", "password": "secret"}, follow_redirects=True)
+    assert response.status_code == 200 and "Nouvelle non-conformité" in response.text
+
+    page = client.get("/non-conformites/nouvelle")
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+    submission = re.search(r'name="submission_token" value="([^"]+)"', page.text).group(1)
+    calls = []
+    def record_creation(actor, data, key, address):
+        calls.append((actor["matricule"], dict(data), key))
+        if not data["description"].strip():
+            raise FormError({"description": "Ce champ est obligatoire."})
+        return 41, False
+    monkeypatch.setattr("anrt.routes.create_nc", record_creation)
+    nc = dict(id=41, reference="NC-PO-001-26", statut_code="OUVERTE", statut="Ouverte",
+              date_creation=date(2026, 10, 5), date_echeance=None, updated_at=datetime(2026, 10, 5),
+              declarant=user["nom_prenom"], enregistree_par_matricule="00017",
+              responsable="Recette", responsable_matricule="00017", processus_code="PO",
+              processus="Politique", type_nc="Autre", nature_service="Autre",
+              description=values["description"], traitement=values["traitement"])
+    monkeypatch.setattr("anrt.routes.detail_nc", lambda *_: (nc, []))
+    payload = {**values, "csrf_token": token, "submission_token": submission}
+    invalid = client.post("/non-conformites/nouvelle", data={**payload, "description": " "})
+    assert invalid.status_code == 422 and "Ce champ est obligatoire." in invalid.text
+    assert submission in invalid.text and values["traitement"] in invalid.text
+    saved = client.post("/non-conformites/nouvelle", data=payload)
+    assert saved.status_code == 303 and saved.headers["Location"].endswith("/non-conformites/41")
+    detail = client.get(saved.headers["Location"])
+    assert "Votre non-conformité a été enregistrée." in detail.text
+    assert nc["reference"] in detail.text and values["description"] in detail.text
+    assert calls[-1] == ("00017", values, submission)
+    logout_token = re.search(r'name="csrf_token" value="([^"]+)"', detail.text).group(1)
+    assert client.post("/deconnexion", data={"csrf_token": logout_token}).status_code == 303
+    assert client.get("/non-conformites/41").status_code == 302
+
+
+@pytest.mark.parametrize("profile", ["ADMINISTRATEUR", "PILOTE_PROCESSUS", "RESPONSABLE", "CONSULTATION"])
+def test_every_profile_is_denied_when_permissions_are_unconfirmed(client, monkeypatch, user, profile):
+    user["profiles"] = [profile]
+    signed_in(client, monkeypatch, user)
+    assert client.get("/non-conformites").status_code == 403
+    assert client.get("/non-conformites/nouvelle").status_code == 403
+    assert client.post("/non-conformites/nouvelle", data={"csrf_token": "test-csrf"}).status_code == 403

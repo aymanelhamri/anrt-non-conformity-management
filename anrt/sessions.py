@@ -32,8 +32,13 @@ class SQLiteSessions(SessionInterface):
 
     @contextmanager
     def connection(self):
-        with sqlite3.connect(self.path, timeout=10) as db:
-            yield db
+        db = sqlite3.connect(self.path, timeout=10)
+        try:
+            # Le contexte SQLite commit/rollback, mais ne ferme pas la connexion.
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def open_session(self, app, request):
         sid = request.cookies.get(self.get_cookie_name(app), "")

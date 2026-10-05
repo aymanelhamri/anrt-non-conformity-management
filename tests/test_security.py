@@ -14,6 +14,8 @@ def test_argon2id_and_bcrypt():
     assert verify_password(encoded, "mot-de-passe")
     assert not verify_password(encoded, "incorrect")
     assert not verify_password(encoded, "a" * 73)
+    # Préfixe utilisé par les hashes bcrypt de PHP password_hash().
+    assert verify_password(encoded.replace("$2b$", "$2y$", 1), "mot-de-passe")
 
 
 @pytest.mark.parametrize("encoded", ["plaintext", "$argon2id$invalid", "$2b$invalid", "$argon2i$invalid"])

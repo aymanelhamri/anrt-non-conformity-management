@@ -67,7 +67,7 @@ def nc_list():
         abort(error.status, " ".join(error.errors.values()))
     def page_url(page):
         return url_for("web.nc_list", **{k: v for k, v in filters.items() if v}, page=page)
-    return render_template("list.html", **result, filters=filters, options=choices(g.user, include_inactive=True), may_create=can_create(g.user), page_url=page_url)
+    return render_template("list.html", **result, filters=filters, options=choices(g.user, for_list=True), may_create=can_create(g.user), page_url=page_url)
 
 
 @web.route("/non-conformites/nouvelle", methods=["GET", "POST"])
@@ -95,7 +95,7 @@ def nc_new():
     try:
         options = choices(g.user)
     except pymysql.MySQLError:
-        options = {"processus": [], "types_nc": [], "natures_service": [], "responsables": [], "statuts": []}
+        options = {"processus": [], "types_nc": [], "natures_service": [], "responsables": []}
         errors.setdefault("form", "Les listes de choix sont indisponibles. Votre saisie est conservée ; réessayez avec ce formulaire.")
         status = 503
     return render_template("new.html", values=values, errors=errors, submission_token=token,

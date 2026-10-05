@@ -1,8 +1,9 @@
 # Conception de l'application ANRT Qualité
 
-Version de travail du 5 octobre 2026, à examiner avec la responsable avant le
-développement. Ce dossier est une spécification proposée, pas une validation
-des règles métier ni la description d'une application déjà opérationnelle.
+Version de travail du 5 octobre 2026, initialement préparée avant le développement.
+Ce dossier reste une spécification proposée, pas une validation des règles métier.
+Le premier parcours dispose désormais d'une [implémentation](../implementation.md),
+dont la [recette MySQL](../verification.md) reste à exécuter.
 
 ## Lecture et livrables
 
