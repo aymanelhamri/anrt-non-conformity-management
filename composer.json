@@ -1,0 +1,17 @@
+{
+    "name": "anrt/non-conformity-management",
+    "description": "Gestion des non-conformités ANRT en PHP et PDO MySQL",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.3",
+        "ext-pdo": "*",
+        "ext-pdo_mysql": "*",
+        "ext-mbstring": "*"
+    },
+    "scripts": {
+        "test": ["@php tests/run.php", "@php tests/http.php"],
+        "test:mysql": "@php tests/mysql.php",
+        "check-db": "@php bin/console.php check-db"
+    }
+}

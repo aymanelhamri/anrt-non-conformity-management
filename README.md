@@ -1,58 +1,72 @@
 # ANRT — gestion des non-conformités
 
-Application web développée dans le cadre d’un stage à l’ANRT pour digitaliser
-la gestion des non-conformités, des actions d’amélioration et leur suivi.
+Application web de stage en **PHP 8.3+ et PDO MySQL**, pour enregistrer et
+consulter les non-conformités avec contrôle des accès et audit de création.
 
-Le projet centralise les non-conformités, les processus, les types, les natures
-de service, les responsables, les échéances et les actions correctives. Il doit
-également couvrir les validations, les notifications, les tableaux de bord et
-la traçabilité des opérations.
+Le parcours livré est : connexion → liste → nouvelle NC → contrôles serveur
+→ enregistrement → confirmation et fiche → déconnexion. Les décisions métier
+restent à confirmer ; les droits non configurés sont refusés par défaut.
 
-## Base de données
+## Base de données et conception
 
-Le schéma MySQL initial est disponible dans le dossier
-[database](database/README.md). Il intègre les tables du personnel proposées
-par la superviseure et les référentiels extraits du fichier Excel existant.
+Les [scripts SQL](database/README.md) restent la référence et sont inchangés.
+Le [modèle expliqué](docs/modele-donnees.md) réutilise les tables RH existantes,
+sans créer de table générique d'utilisateurs.
 
-Une explication fonctionnelle et le diagramme des relations se trouvent dans
-[docs/modele-donnees.md](docs/modele-donnees.md).
+Le [dossier de conception](docs/conception/README.md) décrit le processus, les
+profils, les écrans, les critères de recette et les décisions D01 à D14.
+Il distingue les contraintes SQL des propositions à valider avec l'encadrante.
 
-## Conception avant développement
+## Démarrer
 
-Le [dossier de conception](docs/conception/README.md) décrit les besoins, le
-parcours d'une non-conformité, les profils et validations, les écrans, les
-données et les critères de recette. Il distingue les constats du dépôt des
-propositions et des décisions à confirmer par la responsable.
+PHP 64 bits, extensions `pdo_mysql` et `mbstring`, Composer et MySQL 8.0.16+
+sont nécessaires. Aucun framework ou paquet PHP tiers n'est utilisé.
 
-Le premier parcours proposé est l'enregistrement et la consultation d'une
-non-conformité. Ce choix et le périmètre du deuxième jalon restent à confirmer.
-Le dépôt comprend désormais une première implémentation Python/Flask du parcours
-connexion → liste → création → confirmation et fiche. Les scripts SQL initiaux
-restent inchangés. Les droits métier sont refusés par défaut ; une démonstration
-explicitement activée permet d'exercer les propositions en attente de validation.
+```powershell
+composer install
+Copy-Item .env.example .env
+php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+```
 
-L'[installation et le fonctionnement livré](docs/implementation.md) décrivent
-l'arborescence, la configuration MySQL, les permissions, le lancement sous
-PowerShell, la recette et les décisions restantes. Les
-[résultats de vérification](docs/verification.md) distinguent les tests exécutés
-des contrôles MySQL restant à effectuer.
+Configurer `.env` avec la clé générée et les paramètres MySQL. Installer les
+scripts SQL dans une base de recette, puis préparer ses comptes et leurs hashes.
+Voir le [guide d'installation](docs/implementation.md) pour les permissions et
+le mode de démonstration explicite.
+
+```powershell
+php bin/console.php check-db
+php -S 127.0.0.1:5000 -t public public/index.php
+```
+
+Ouvrir `http://127.0.0.1:5000`. Pour cette démonstration HTTP locale, fixer
+`SESSION_COOKIE_SECURE=false`. En exploitation, utiliser HTTPS et le dossier
+`public/` comme seule racine web.
 
 ## Comprendre le projet rapidement
 
-Le projet actuel utilise **Python/Flask et PyMySQL**. Il ne contient pas de
-code PHP, de PDO ni de `composer.json`.
-
 | Étape | Où regarder |
 | --- | --- |
-| 1. Point d'entrée | `wsgi.py` appelle `create_app()` dans `anrt/__init__.py`. |
-| 2. Base de données | `database/001_schema.sql` est la référence ; `anrt/db.py` ouvre MySQL. |
-| 3. Authentification | `anrt/auth.py` vérifie le matricule, le hash et les dates de validité ; `anrt/sessions.py` gère la session. |
-| 4. Permissions | `anrt/permissions.py` contrôle les opérations et les périmètres ; aucun droit métier par défaut. |
-| 5. Liste des NC | `nc_list()` dans `anrt/routes.py` appelle `list_nc()` dans `anrt/repository.py`, puis `list.html`. |
-| 6. Création NC | `nc_new()` dans `anrt/routes.py` reçoit le formulaire ; `anrt/validation.py` contrôle les champs. |
-| 7. Transaction | `create_nc()` dans `anrt/service.py` utilise une connexion pour référence, NC et audit. |
+| 1. Point d'entrée | `public/index.php` charge `app/bootstrap.php`, puis `app/web.php`. |
+| 2. Base de données | `database/001_schema.sql` est la référence ; `app/database.php` ouvre PDO MySQL. |
+| 3. Authentification | `app/auth.php` utilise `password_verify`, les dates de compte et les sessions PHP natives. |
+| 4. Permissions | `app/permissions.php` contrôle opérations et périmètres ; aucun droit métier par défaut. |
+| 5. Liste des NC | `list_nc()` dans `app/non_conformites.php`, affichée par `templates/list.php`. |
+| 6. Création NC | `app/web.php` reçoit le formulaire ; `validate_nc()` contrôle les champs. |
+| 7. Transaction | `create_nc()` utilise une seule connexion PDO pour la référence, la NC et l'audit. |
 | 8. Audit | Le même `create_nc()` insère dans `journal_audit` avant le commit. |
-| 9. Fiche détaillée | `nc_detail()` appelle `detail_nc()` dans `anrt/repository.py`, puis `detail.html`. |
+| 9. Fiche détaillée | `detail_nc()` applique le périmètre ; `templates/detail.php` affiche la fiche. |
 
-Pour suivre le parcours en cinq minutes : [guide stagiaire](docs/guide-stagiaire.md).
-Les constats, corrections et limites figurent dans la [revue du projet](docs/revue.md).
+Le [guide stagiaire](docs/guide-stagiaire.md) suit ce parcours en cinq minutes.
+La [revue](docs/revue.md) explique le portage et ses limites.
+
+## Vérifier
+
+```powershell
+composer validate --strict
+composer test
+composer test:mysql
+```
+
+Les tests MySQL nécessitent une activation explicite ; ils créent des bases de
+recette neuves. Les [résultats réellement exécutés](docs/verification.md)
+distinguent les tests PHP/HTTP locaux de la recette MySQL encore à faire.

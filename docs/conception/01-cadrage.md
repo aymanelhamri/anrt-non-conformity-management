@@ -22,7 +22,7 @@ base MySQL, ni l'exécution réussie des scripts, ni l'import de données réell
 | [Modèle expliqué](../modele-donnees.md) | Réutilisation des tables du personnel ; selon cette documentation, aucun historique métier importé depuis l'Excel fourni. |
 
 Le premier parcours connexion, enregistrement et consultation est désormais
-implémenté en Python/Flask, avec permissions côté serveur et audit de création.
+implémenté en PHP/PDO, avec permissions côté serveur et audit de création.
 Voir le [fonctionnement livré](../implementation.md) et les
 [vérifications exécutées](../verification.md). Les décisions métier restent
 ouvertes. Les notifications, transitions et validations métier ne sont pas

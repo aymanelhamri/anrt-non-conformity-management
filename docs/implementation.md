@@ -1,277 +1,219 @@
-# Premier parcours implémenté
+# Installation et fonctionnement PHP
 
-Cette livraison prépare le lot A décrit dans `conception/05-lots-recette.md`.
-Elle ne vaut pas approbation des décisions métier ouvertes, ni recette MySQL
-complète. Aucun script SQL existant n'a été modifié ou exécuté sur une base métier.
+Le parcours existant a été porté de Flask vers **PHP/PDO**, conformément à la
+technologie demandée. Les URLs, le SQL, les écrans et les règles de sécurité
+sont conservés. Le code Python remplacé a été retiré ; son historique reste
+dans Git. Aucun script SQL n'a été modifié.
 
-Pour une première lecture, commencer par le [guide stagiaire](guide-stagiaire.md).
-La [revue du projet](revue.md) explique les contrôles et les corrections ciblées.
-
-## Choix et arborescence
-
-Python 3.12+, Flask, Jinja et PyMySQL permettent un serveur et des formulaires
-HTML sans compilation frontend. Les requêtes explicites gardent le SQL fourni
-comme référence ; aucun ORM, table utilisateurs ou migration implicite.
-Argon2id est utilisé pour les nouveaux hashes ; bcrypt est accepté en lecture.
-Waitress permet aussi un lancement sous Windows.
+## Organisation
 
 ```text
-anrt/
-  __init__.py        fabrique Flask et protections HTTP
-  config.py         configuration par environnement
-  auth.py           connexion, validité, CSRF
-  sessions.py       sessions révocables et limitation des connexions
-  permissions.py    droits et périmètres centralisés
-  validation.py     types, longueurs UTF-8, dates
-  db.py             connexions MySQL paramétrées, UTC, mode strict
-  repository.py     référentiels, liste, pagination et consultation
-  service.py        transaction NC + compteur + audit, réessais
-  routes.py         parcours HTML
-  cli.py            hash-password et check-db
-  templates/        connexion, liste, formulaire, fiche, erreurs
-  static/           CSS responsive et protection du double clic
-config/
-  permissions.closed.json    refus de tous les droits métier
-  permissions.example.json   exemple NON approuvé
-tests/                      tests locaux et recette MySQL opt-in
-database/                   scripts initiaux conservés
-wsgi.py                     point d'entrée
-.env.example                configuration sans secret
-requirements*.txt           dépendances
+public/index.php              point d'entrée et routeur local
+public/assets/                CSS et JavaScript existants
+app/bootstrap.php             chargement des fonctions et configuration
+app/web.php                   parcours HTTP et rendu
+app/database.php              PDO et requêtes paramétrées
+app/auth.php                  password_verify, sessions, CSRF, limitation
+app/permissions.php           opérations et périmètres
+app/non_conformites.php        validation, lectures SQL, transaction et audit
+config/app.php                configuration et lecture de .env
+config/permissions.*.json     refus par défaut et exemple non approuvé
+templates/                    connexion, liste, formulaire, fiche, erreurs
+bin/console.php               check-db et hash-password
+tests/                        tests PHP, HTTP et recette MySQL opt-in
+database/                     scripts SQL inchangés
 ```
 
-## Installation et lancement sous PowerShell
+Les fonctions sont chargées directement ; aucun ORM, conteneur de services ou
+framework. Composer vérifie les prérequis et lance les tests, sans paquet tiers.
+
+## Préparer PHP et la configuration
+
+Utiliser PHP 8.3+ **64 bits**, avec `pdo_mysql` et `mbstring` activés dans `php.ini`.
+Argon2id doit être disponible pour produire les nouveaux hashes ; la lecture
+des hashes bcrypt existants reste supportée, y compris ceux de la version Python.
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-Copy-Item .env.example .env
-.\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_hex(32))"
+php -v
+php -m
+composer validate --strict
+composer install
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
 ```
 
-Reporter la clé générée dans `SECRET_KEY` de `.env`. Renseigner les paramètres
-MySQL et conserver ce fichier hors de Git. Les variables du processus priment
-sur `.env`. `requirements-lock.txt` permet de reproduire l'environnement de
-vérification, y compris pytest, avec `pip install -r requirements-lock.txt`.
+Reporter la clé dans `SECRET_KEY`, puis renseigner MySQL. Le format de `.env`
+est `NOM=valeur` : guillemets extérieurs facultatifs, commentaires sur leur propre
+ligne, sans interpolation de variables. Les variables du processus priment.
+Le fichier `.env`, les sessions et les outils locaux ne doivent pas être committés.
 
-Sur un **serveur de recette dédié et neuf**, installer les scripts 001 à 004
-dans l'ordre du [guide SQL](../database/README.md). Ils ciblent `anrt_qualite`.
-Le script 003 remplace une procédure : ne pas le relancer sur une base existante
-sans revue. L'application n'initialise et ne migre jamais la base au démarrage.
+PHP et Composer ont été téléchargés pour la vérification dans `.tools/`, ignoré
+par Git. Sur cette machine, utiliser `.\.tools\php\php.exe` et
+`.\.tools\php\php.exe .tools\composer.phar` si PHP/Composer ne sont pas dans le PATH.
+Ces exécutables ne font pas partie de l'application distribuée.
 
-Utiliser un compte applicatif disposant de `SELECT` sur les tables consultées,
-`INSERT` sur `non_conformites` et `journal_audit`, et `EXECUTE` sur
-`generer_reference`. La procédure fournie utilise les droits de son définisseur :
-celui-ci doit avoir `INSERT/UPDATE/SELECT` sur les compteurs et accès au processus.
-L'application ne nécessite aucun droit de création/suppression de table.
+## Installer MySQL et préparer les comptes
 
-Les comptes doivent être fournis par la source RH (`pers`, `acces`,
-`acces_profil`, et affectations pertinentes). Aucun import RH n'est inventé.
-Pour préparer un compte de recette, générer son hash sans passer son mot de
-passe en argument ou le conserver dans un fichier :
+Sur un serveur de recette dédié, appliquer les quatre scripts dans l'ordre du
+[guide SQL](../database/README.md). L'application ne crée ni ne migre la base.
+MySQL 8.0.16+ permet les contraintes CHECK et les verrous `FOR SHARE` utilisés.
+
+Le compte applicatif reçoit `SELECT` sur les tables consultées, `INSERT` sur
+`non_conformites` et `journal_audit`, et `EXECUTE` sur `generer_reference`.
+Le définisseur de la procédure doit pouvoir lire/modifier les compteurs.
+Aucun droit applicatif CREATE/DROP/ALTER n'est nécessaire.
+
+Réutiliser `pers`, `acces`, `acces_profil` et les affectations approuvées.
+`direction` et `personnel_validation` sont conservées, sans inventer un périmètre
+de service ou une approbation. Aucun compte n'est créé au démarrage.
+
+Générer un hash sans exposer le mot de passe en argument ni l'afficher :
 
 ```powershell
-.\.venv\Scripts\python.exe -m flask --app anrt:create_app hash-password
+$passwordCredential = Get-Credential -UserName 'compte_recette' -Message 'Mot de passe du compte à préparer'
+$OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$passwordCredential.GetNetworkCredential().Password | php bin/console.php hash-password
+Remove-Variable passwordCredential
 ```
 
-Insérer ce hash via le canal d'administration autorisé dans `acces.passe`.
-Dans une base de démonstration neuve seulement, un administrateur peut utiliser
-ce modèle SQL, en remplaçant le hash et les dates :
+La commande lit uniquement un mot de passe pipé, puis affiche son hash Argon2id.
+Insérer le hash par le canal d'administration autorisé dans `acces.passe` ;
+préparer aussi la période de validité et les profils. Ne jamais enregistrer un
+mot de passe en clair. Les dates TIMESTAMP sont importées avec conversion UTC.
 
-```sql
-START TRANSACTION;
-INSERT INTO pers (matricule, nom_prenom) VALUES ('00017', 'Compte de recette');
-INSERT INTO acces (matricule, nom, passe, Date_Deb, Date_Fin)
-VALUES ('00017', 'Compte de recette', '<HASH_ARGON2ID_GENERE>', CURRENT_TIMESTAMP, NULL);
-INSERT INTO acces_profil (matricule, profil_code) VALUES ('00017', 'RESPONSABLE');
-COMMIT;
+```powershell
+php bin/console.php check-db
 ```
 
-Ne pas envoyer ce modèle avec le placeholder de hash. Il ne crée ni compte
-automatique ni mot de passe partagé. Les matricules restent des chaînes.
+Ce contrôle lit la version, le fuseau SQL, la présence de la procédure et du
+statut `OUVERTE`. Il n'écrit aucune donnée métier.
 
-Pour exercer le parcours en démonstration locale, modifier `.env` :
+## Lancer et configurer les droits
+
+Pour une démonstration locale seulement :
 
 ```dotenv
 DEMO_MODE=true
 SESSION_COOKIE_SECURE=false
 ```
 
-Ce mode active explicitement la politique de démonstration décrite ci-dessous,
-le login par matricule, et la saisie initiale conforme au SQL. Le bandeau apparaît
-sur toutes les pages. Il nécessite quand même MySQL et des comptes valides.
-
 ```powershell
-.\.venv\Scripts\python.exe -m flask --app anrt:create_app check-db
-.\.venv\Scripts\python.exe -m flask --app anrt:create_app run --host 127.0.0.1 --port 5000
+php -S 127.0.0.1:5000 -t public public/index.php
 ```
 
-Ouvrir `http://127.0.0.1:5000`. Se connecter, ouvrir la liste, créer une NC avec
-ses trois référentiels, une description, un traitement et un responsable réel.
-Après succès, la fiche affiche la référence et, si autorisé, l'événement de création.
-La déconnexion se fait par formulaire POST protégé.
+Le mode démo utilise le matricule et les règles initiales conformes au SQL ;
+son bandeau rappelle qu'elles ne sont pas approuvées. MySQL et des comptes de
+recette restent nécessaires.
 
-Pour un serveur derrière HTTPS : `DEMO_MODE=false`,
-`SESSION_COOKIE_SECURE=true`, puis :
-
-```powershell
-.\.venv\Scripts\waitress-serve.exe --listen=127.0.0.1:8000 wsgi:app
-```
-
-Configurer le frontal HTTPS et son contrôle de débit. L'application ne fait pas
-confiance aux en-têtes IP transmis par le client. Sa limitation interne s'appuie
-sur l'adresse de connexion effective ; derrière un proxy, elle peut être commune
-aux utilisateurs. Ne pas activer le debugger en exploitation.
-
-## Règles confirmées et choix provisoires
-
-| Élément | État et comportement livré |
-| --- | --- |
-| Structure et types | Confirmés par le SQL : matricules `VARCHAR(60)` binaires, IDs unsigned, référence 50 caractères, `TEXT` limité à 65 535 octets UTF-8, dates `DATE`. Aucun trim/troncature des données enregistrées. |
-| Responsable et traitement | Obligatoires selon le schéma ; aucun substitut fictif. La création hors démo reste bloquée avant confirmation D03/D04/D07. |
-| Compte | Vérification SQL de `Date_Deb <= maintenant` et `Date_Fin > maintenant` ou NULL à la connexion et à chaque opération protégée. Les profils sont rechargés à chaque requête et revérifiés dans la transaction de création. |
-| Identifiant | **Proposition D14** : le matricule, clé unique et binaire. Hors démo, `LOGIN_IDENTIFIER=matricule` doit être explicitement fixé après confirmation. `acces.nom` n'est pas utilisé pour identifier un compte. |
-| Champs automatiques | Déclarant issu de la session, création datée par le serveur, référence générée, `OUVERTE`, horodatages SQL. Toute soumission de champs protégés ou répétés est rejetée. |
-| Date métier | **Proposition D04** : aujourd'hui dans `APP_TIMEZONE=Africa/Casablanca`, configurable ; les TIMESTAMP et comparaisons de validité utilisent UTC. Les dates de compte doivent être importées avec leur fuseau correctement converti. |
-| Échéance | **Proposition D04** : facultative suivant le SQL ; `NC_DEADLINE_REQUIRED=true` permet de la rendre obligatoire. Pas de rétroactivité. |
-| Profils | **Décisions D05/D06 ouvertes** : aucun droit métier par défaut. Pas de conversion des quatre codes existants en trois nouveaux profils. |
-| Cumul | Les droits explicitement configurés sont réunis ; ce choix technique doit être confirmé avec D05. Un profil inconnu n'accorde rien. |
-| Référence | Procédure existante, même connexion/transaction que NC et audit. Au-delà de 999, rollback et refus explicite ; extension du format en attente D13. |
-| Réessais | **Proposition D13** : même clé signée et même contenu => même dossier ; même clé et contenu différent => conflit 409. Un nouveau formulaire signifie une nouvelle déclaration. |
-| Action corrective | Le défaut FALSE est stocké par SQL ; aucun examen métier n'en est déduit ou affiché. |
-
-Hors démonstration, activer les règles retenues avec
-`NC_INITIAL_RULES_CONFIRMED=true` seulement après validation de D03/D04 et de
-l'absence de validation obligatoire à l'enregistrement (D07). Fournir un fichier
-JSON de droits approuvés via `PERMISSIONS_FILE`. L'exemple fourni est une
-proposition à revoir ; le fichier fermé `{}` est le comportement par défaut.
-
-Les permissions disponibles sont `create` (booléen), `read` et `audit` (listes de
-périmètres `own`, `assigned`, `process`, `all`), et `assign` (`self`, `process`,
-`all`). `process` repose uniquement sur une affectation explicite dans
-`processus_responsable` ; ce lien n'accorde aucun droit sans configuration.
-`assign=process` limite le responsable au processus choisi à l'enregistrement.
-Un droit de création requiert aussi la consultation de ses déclarations.
-
-La politique de **démonstration seulement** est :
-
-| Code SQL | Création | Consultation | Audit | Responsable sélectionnable |
+| Profil SQL | Création | Lecture | Audit | Affectation |
 | --- | --- | --- | --- | --- |
 | ADMINISTRATEUR | Oui | Tous | Tous | Personnel existant |
-| RESPONSABLE | Oui | Déclarations et dossiers affectés | Même périmètre | Soi-même |
-| PILOTE_PROCESSUS | Non | Processus explicitement affectés | Même périmètre | Aucun |
-| CONSULTATION | Non | Déclarations et dossiers affectés | Non | Aucun |
+| RESPONSABLE | Oui | Ses déclarations et affectations | Même périmètre | Lui-même |
+| PILOTE_PROCESSUS | Non | Processus explicitement affectés | Même périmètre | Aucune |
+| CONSULTATION | Non | Ses déclarations et affectations | Non | Aucune |
 
-Les permissions s'appliquent côté serveur à la liste, à la fiche et à la
-création. Une fiche absente ou hors périmètre renvoie le même 404 afin de ne pas
-révéler son existence. Les champs RH non nécessaires ne sont pas sélectionnés.
+Hors démo : `DEMO_MODE=false`, `LOGIN_IDENTIFIER=matricule` après D14,
+`PERMISSIONS_FILE` vers des droits approuvés, puis `NC_INITIAL_RULES_CONFIRMED=true`
+après D03/D04/D07. Sans ces confirmations, la création reste refusée.
+`NC_DEADLINE_REQUIRED` règle l'obligation d'échéance après D04.
 
-## Transactions, sessions et limites connues
+Les permissions `read`/`audit` portent sur `own`, `assigned`, `process` ou `all`.
+`assign` vaut `self`, `process` ou `all`. Aucun lien de personnel n'accorde un
+droit implicitement. Le cumul réunit les droits explicitement configurés ; D05
+doit confirmer ce choix. La liste et la fiche utilisent le même périmètre SQL.
 
-Une clé signée lie chaque formulaire à son acteur. `GET_LOCK` sérialise les
-soumissions de cette clé sur le même serveur MySQL, avant le début de la
-transaction. L'audit stocke la clé sous forme de SHA-256 et l'empreinte du contenu
-dans son JSON existant. Le service cherche un succès antérieur, revérifie les
-données et les droits, appelle la procédure, contrôle le compteur, insère la NC
-et son audit, puis valide. Tout échec confirmé provoque un rollback.
+En exploitation, servir **uniquement `public/`** derrière HTTPS, avec
+`SESSION_COOKIE_SECURE=true`. Pour Apache, le fichier `.htaccess` fournit les
+réécritures si `mod_rewrite` et AllowOverride sont activés. Le serveur PHP intégré
+sert aux vérifications locales. Protéger les fichiers privés avec les droits du
+compte de service et conserver les erreurs détaillées hors des réponses web.
 
-Une erreur de communication pendant le commit peut signifier un résultat
-inconnu. Le message ne prétend pas que l'opération a échoué : le formulaire et
-sa clé sont conservés. Le réessai retrouve l'audit d'un succès éventuel, même
-après reconnexion ou redémarrage. Une échéance d'hier n'empêche pas de retrouver
-un succès déjà validé. Le changement de contenu d'une clé déjà utilisée est
-refusé. Le verrou est libéré explicitement et aussi à la fermeture de connexion.
+## Transaction et réessais
 
-Cette protection nécessite un **serveur MySQL d'écriture unique**. Elle ne
-couvre pas une application extérieure qui ignore ce protocole, ni un déploiement
-multi-primary. Le JSON d'audit n'est pas indexé pour cette recherche : une
-évolution de volumétrie ou de rétention demandera une migration revue.
-Conserver les audits de création est nécessaire à la récupération des réessais.
-Deux formulaires avec deux clés distinctes peuvent créer deux dossiers au contenu
-identique ; aucune règle de dédoublonnage métier n'est inventée.
+`create_nc()` reçoit une connexion PDO non persistante. Avec cette même connexion :
 
-Les sessions et limites de connexion sont dans `instance/sessions.sqlite3`,
-stockage technique local distinct de la base métier. Le cookie contient seulement
-un identifiant aléatoire, HttpOnly, SameSite=Lax, Secure par défaut. Il est changé
-à la connexion et révoqué côté serveur à la déconnexion. L'inactivité maximale
-est de 30 minutes. CSRF protège tous les POST, y compris connexion/déconnexion ;
-les contenus affichés sont échappés et les ressources sont locales.
-
-Protéger `instance/` avec les permissions du compte de service. Les workers sur
-une même machine doivent partager ce fichier. Pour plusieurs machines, prévoir
-un stockage de sessions partagé avant déploiement. Ne pas servir `instance/`
-comme ressource web. Aucun mot de passe, hash ou requête SQL contenant des données
-métier n'est écrit dans les logs de l'application.
-
-Chaque connexion SQLite est fermée explicitement après commit ou rollback.
-Pour afficher la liste, seules les options de filtres processus et statuts sont
-chargées ; le personnel sélectionnable et les autres référentiels ne sont lus
-que pour le formulaire de création.
-
-## Vérifications et recette
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m compileall -q anrt wsgi.py
-git diff --check
+```text
+GET_LOCK sur la clé du formulaire
+BEGIN
+  revérifier le compte et ses profils
+  retrouver un succès antérieur éventuel
+  valider les champs et les référentiels
+  CALL generer_reference, puis vider les jeux de résultats PDO
+  vérifier le compteur <= 999
+  INSERT non_conformites
+  INSERT journal_audit
+COMMIT
+RELEASE_LOCK
 ```
 
-Les tests locaux exercent validations, limites UTF-8, dates, matricules,
-Argon2id/bcrypt, CSRF, rotation/révocation de sessions, débit de connexion,
-refus par défaut, accès direct refusé à CONSULTATION, rendu des pages, échappement
-HTML et maintien de la saisie après erreur. Les accès MySQL des tests HTTP sont
-remplacés par des doubles : cela ne prouve pas le fonctionnement sur une vraie base.
+Une exception annule la transaction encore active. La fiche de confirmation
+est demandée par redirection 303 après succès. Les valeurs contrôlées par le
+serveur sont le déclarant, la date, la référence, le statut `OUVERTE` et l'audit.
+L'échéance facultative respecte la contrainte SQL ; les textes dépassant 65 535
+octets UTF-8 et les matricules dépassant 60 caractères sont refusés sans troncature.
 
-La suite d'intégration **opt-in** nécessite MySQL 8.0.16+ et un compte autorisé à
-créer des bases de recette. Elle n'utilise pas la base indiquée par `MYSQL_DATABASE` :
-chaque test crée une nouvelle base `anrt_recette_<uuid>`, applique les quatre
-scripts et fournit ses propres comptes temporaires. Une collision du nom fait
-échouer la création. Aucune base existante n'est vidée ou supprimée ; les bases
-de tests sont conservées et leurs noms sont affichés pour inspection.
+La clé signée est liée au matricule. Le JSON d'audit conserve son empreinte et
+celle du contenu. Un réessai avec même clé/contenu retrouve le dossier ; un
+contenu différent après succès reçoit 409. Deux formulaires distincts peuvent
+créer deux déclarations identiques : aucune règle métier de dédoublonnage n'est inventée.
+
+Après une perte de réponse pendant le commit, le résultat est inconnu ; conserver
+le formulaire et réessayer. Cette protection suppose un serveur MySQL d'écriture
+unique et la conservation de l'audit. La recherche JSON n'est pas indexée.
+Le format au-delà de 999 reste D13 : l'application refuse le dépassement.
+
+## Sessions et sécurité
+
+Les sessions PHP natives sont stockées dans `instance/sessions/`, ou dans le
+dossier privé `SESSION_PATH`. Cookies HttpOnly, SameSite=Lax, Secure par défaut ;
+mode strict, rotation à la connexion, suppression serveur à la déconnexion,
+expiration explicite après 30 minutes d'inactivité. Le cookie est renouvelé sur
+les requêtes de l'application. Le verrou natif sérialise les requêtes d'une session.
+
+Les limites de connexion sont persistées dans un fichier JSON privé verrouillé
+par `flock` : 8 tentatives par IP/matricule, 30 par IP sur 10 minutes. Le frontal
+doit gérer son propre débit ; l'application ne fait pas confiance aux en-têtes
+IP clients. Les workers d'une machine partagent le dossier privé ; plusieurs
+machines nécessitent un stockage commun adapté avant déploiement.
+
+Tous les POST vérifient le CSRF. Le formulaire refuse champs protégés, tableaux
+et champs répétés avant que PHP ne les écrase. Les contenus sont échappés ;
+les erreurs SQL et les secrets ne sont pas affichés ou journalisés.
+
+La migration demande une reconnexion et de nouveaux formulaires : les sessions
+et clés Flask ne sont pas reconnues en PHP. Les dossiers et audits MySQL existants
+restent lisibles. Les éventuels fichiers locaux de l'ancienne version ne sont pas utilisés.
+
+## Tests et décisions restantes
+
+```powershell
+composer test
+composer test:mysql
+```
+
+Les tests locaux vérifient PHP, les sessions natives et le HTTP, avec un PDO
+instrumenté pour les opérations métier. Ils ne prouvent pas l'atomicité MySQL.
+Pour les 13 tests MySQL, fournir un serveur et un compte de recette autorisé à
+créer des bases ; chaque cas crée sa propre base neuve, conservée pour inspection.
+Aucune base existante n'est vidée ou supprimée.
 
 ```powershell
 $env:TEST_MYSQL = '1'
 $env:TEST_MYSQL_HOST = '127.0.0.1'
 $env:TEST_MYSQL_PORT = '3306'
 $env:TEST_MYSQL_USER = 'compte_recette'
-$testCredential = Get-Credential -UserName 'compte_recette' -Message 'Compte MySQL de recette'
+$testCredential = Get-Credential -UserName 'compte_recette' -Message 'Serveur MySQL de recette'
 $env:TEST_MYSQL_PASSWORD = $testCredential.GetNetworkCredential().Password
-.\.venv\Scripts\python.exe -m pytest -m mysql -v -s
+composer test:mysql
 Remove-Item Env:TEST_MYSQL_PASSWORD
 Remove-Item Env:TEST_MYSQL
 ```
 
-| Critères | Tests préparés | État local |
-| --- | --- | --- |
-| CA01/02 | HTTP, sessions et hashes ; validité réelle des comptes dans MySQL | Partie locale vérifiée ; MySQL à exécuter |
-| CA03/06/09/10/14 | Création/audit, FK, inactivité, simultanéité et trigger d'échec d'audit | MySQL à exécuter |
-| CA04/05/07/08 | Champs requis, octets UTF-8, unsigned, dates, champs protégés | Vérifiés localement |
-| CA11 | Signature de clé et acteur ; double soumission simultanée ; perte simulée de réponse après commit | Partie locale vérifiée ; MySQL à exécuter |
-| CA12/13 | Refus HTTP et rendu ; périmètre SQL, 21 dossiers, filtres et pagination | Partie locale vérifiée ; MySQL à exécuter |
-| CA15 | Saisie et clé conservées après erreur, y compris indisponibilité des référentiels | Vérifié localement |
-| CA16 | Numéro 999 accepté, 1000 bloqué avec compteur rollback ; contrôle de LPAD réel | MySQL à exécuter |
+Les [résultats](verification.md) distinguent ce qui a été exécuté et ce qui reste
+à faire. Le [registre D01 à D14](conception/06-decisions.md) reste ouvert : aucun
+circuit de validation, transition, clôture, action corrective ou envoi de notification
+n'est présenté comme livré dans ce premier parcours.
 
-L'environnement inspecté possède Python ; aucun client/service MySQL n'a été
-trouvé et le moteur Docker n'est pas démarré. Résultats effectivement exécutés
-le 5 octobre 2026 : voir `verification.md`. Le lot A ne peut pas être déclaré
-recetté tant que les décisions dépendantes et ces tests réels ne sont pas validés.
-
-## Décisions encore nécessaires
-
-Le périmètre NC de ce développement est demandé par l'utilisateur ; la
-numérotation officielle des jalons reste D02. Restent à confirmer : D03
-(sens/auteur/instant du traitement et responsable), D04 (échéance et fuseau/date),
-D05/D06 (profils, cumul, périmètres et affectation), D07 (validation obligatoire
-ou non dès l'enregistrement), D13 (limite 999, format et réessais), D14
-(identifiant RH, préparation des comptes, exploitation et rétention d'audit).
-
-D08 à D12 restent ouvertes pour les extensions. Aucun circuit 1→2→3,
-validation de NC dans `validations`, changement de statut, clôture, action
-corrective, administration complète, notification automatique ou tableau de
-bord n'est livré ou présenté comme disponible.
-
-Références techniques : [sécurité Flask](https://flask.palletsprojects.com/en/stable/web-security/),
-[résultats des procédures PyMySQL](https://pymysql.readthedocs.io/en/latest/modules/cursors.html),
-[LPAD MySQL](https://dev.mysql.com/doc/refman/8.4/en/string-functions.html),
-[verrous nommés MySQL](https://dev.mysql.com/doc/refman/8.4/en/locking-functions.html),
-[Argon2id](https://argon2-cffi.readthedocs.io/en/stable/howto.html).
+Références : [PDO et procédures](https://www.php.net/manual/en/pdo.prepared-statements.php),
+[nextRowset](https://www.php.net/manual/en/pdostatement.nextrowset.php),
+[sécurité des sessions PHP](https://www.php.net/manual/en/session.security.ini.php).

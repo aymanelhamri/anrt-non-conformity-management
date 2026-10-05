@@ -1,68 +1,54 @@
-# Vérifications du 5 octobre 2026
+# Vérifications PHP du 5 octobre 2026
 
-Environnement : Windows, Python 3.12.10, environnement virtuel `.venv`.
-Les dépendances ont été installées depuis PyPI dans cet environnement.
-Les versions exactes sont dans `requirements-lock.txt`.
+Environnement de vérification : Windows, **PHP 8.5.11 64 bits**, Composer 2.10.3.
+Les exécutables officiels ont été téléchargés dans `.tools/`, puis leurs
+empreintes SHA-256 ont été vérifiées. Ce dossier est ignoré par Git.
 
-| Commande / constat | Résultat réellement obtenu |
+Les anciens résultats Flask/Python sont dans l'historique Git ; ils ne constituent
+pas des résultats de tests PHP. Les contrôles ci-dessous portent sur le portage.
+
+| Commande / scénario | Résultat réellement obtenu |
 | --- | --- |
-| `python -m pytest -q` | 54 tests locaux réussis, 13 cas MySQL ignorés explicitement ; 5,08 secondes. |
-| `python -m compileall -q anrt wsgi.py` | Réussi. |
-| `python -m pip check` | Réussi : aucune dépendance incohérente. |
-| `git diff --check` | Réussi ; avertissement Git de conversion LF/CRLF pour le README sous Windows. |
-| Recherche MySQL | Aucun client `mysql`, aucun service MySQL/MariaDB et aucun répertoire MySQL trouvé dans Program Files. |
-| `docker version` | Client présent ; moteur Docker indisponible. |
-| Démarrage Flask local (debug désactivé) | Serveur démarré sur `127.0.0.1:5051`, puis arrêté après la vérification. |
-| Requêtes HTTP réelles | `/connexion` : 200, contenu français attendu, `Cache-Control: no-store` ; `/static/app.css` : 200. Aucun accès métier MySQL utilisé. |
+| `php -l` sur les 22 fichiers PHP | Aucune erreur de syntaxe. |
+| `composer validate --strict` | Manifest et verrou valides. |
+| `composer test` | **63 tests PHP locaux réussis**, puis **36 contrôles HTTP avec PDO instrumenté** et **13 contrôles HTTP via le point d'entrée public**, sans échec. |
+| `composer test:mysql` | Exécuté sans activation : message explicite indiquant que les 13 cas MySQL n'ont pas été exécutés. |
+| `php bin/console.php check-db` | Tenté avec clé temporaire : échec de connexion MySQL, code 2002, sortie 1. |
+| `composer install --no-plugins --no-scripts` | Prérequis compatibles, aucune dépendance tierce à installer. Les filtres réseau Composer sont inaccessibles dans le bac à sable ; aucune analyse de sécurité réseau n'est déclarée. |
+| `git diff --check` et espaces finaux des nouveaux fichiers | Vérifiés, sans erreur. |
+| Comparaison des ressources CSS et JS | Copies identiques aux ressources précédentes. |
+| Comparaison des scripts SQL | Aucun changement. |
 
-Les tests locaux utilisent Flask test_client et des doubles pour les appels
-MySQL des routes. Ils vérifient des protections et le rendu HTML ; ils ne
-constituent pas une recette de la procédure stockée ou des contraintes MySQL.
-Six tests avec une connexion instrumentée exercent aussi l'orchestration de
-création, l'audit, le rollback appelé en cas d'échec, le refus du numéro 1000,
-le réessai et la revérification du compte. Ils ne prouvent pas l'atomicité réelle.
+Les tests PHP vérifient IDs unsigned, zéros des matricules, longueurs Unicode et
+octets UTF-8, textes requis, dates invalides/antérieures, obligation d'échéance,
+`password_verify` Argon2id/bcrypt y compris les préfixes existants `$2a$`/`$2b$`,
+politiques fermées, périmètres, CSRF, signature de soumission, champs répétés,
+limites persistantes de connexion, orchestration de transaction, audit et réessais.
 
-Restent à exécuter sur MySQL : application des quatre scripts sur bases neuves,
-validité des comptes, création réelle, audit, échecs transactionnels,
-références concurrentes, clés concurrentes, réponse perdue après commit,
-limite 999, périmètres SQL, filtres et pagination réels. La suite opt-in et ses
-instructions figurent dans [implementation.md](implementation.md).
+Les tests HTTP démarrent puis arrêtent de vrais serveurs PHP locaux. Ils exercent
+connexion → liste → nouvelle NC → validation invalide → resoumission → création
+→ confirmation/fiche/audit → réessai → déconnexion, ainsi que rotation et
+expiration effectives des sessions et refus de réutilisation d'un cookie révoqué.
+Ils vérifient aussi les refus de permissions, les POST protégés, les fichiers
+privés inaccessibles, les ressources et les pages sans authentification.
 
-Une vérification visuelle interactive dans un navigateur reste également à
-effectuer. Aucune connexion à une base métier ou opération destructive n'a été
-effectuée.
+**Les opérations métier du parcours authentifié utilisent un PDO instrumenté.**
+Cela vérifie l'exécution PHP et les appels SQL, pas leur stockage réel. La
+validation des comptes futurs/expirés n'a pas été exécutée sur MySQL.
 
-## Revue complémentaire du 5 octobre 2026
+## Recette restant à exécuter
 
-Les résultats ci-dessus décrivent la première livraison. Après revue et
-corrections ciblées, les contrôles suivants ont réellement été exécutés :
+Les 13 cas de `tests/mysql.php` sont portés depuis la suite précédente et restent
+opt-in. Ils créent des bases neuves au nom aléatoire, y appliquent les scripts,
+préparent leurs comptes, puis vérifient validité, création, audit, rollback,
+concurrence, perte de réponse après commit, plafond 999, références inexistantes,
+référentiel inactif, affectation interdite, périmètres, filtres et pagination.
+Aucune base existante n'est vidée ou supprimée ; les bases de recette sont conservées.
 
-| Commande / scénario | Résultat |
-| --- | --- |
-| `python -m pytest -q` | **66 tests locaux réussis, 13 cas MySQL ignorés**, 7,65 secondes. |
-| `python -m compileall -q anrt tests wsgi.py` | Réussi. |
-| `python -m pip check` | Réussi : aucune dépendance incohérente. |
-| `git diff --check` | Réussi ; seuls les avertissements LF/CRLF Windows subsistent. |
-| Défaut SQLite, avant correction | Connexion encore utilisable après sortie du contexte ; suppression du fichier temporaire bloquée par Windows. |
-| Connexion SQLite, après correction | Tests de commit, rollback et fermeture réussis ; répertoire temporaire supprimé après arrêt du serveur. |
-| Parcours HTTP Flask complet | Connexion, liste, formulaire, erreur de saisie, resoumission, confirmation/fiche et déconnexion réussis avec des doubles MySQL. |
-| Refus des quatre profils sans permissions confirmées | Liste et création refusées côté serveur, y compris POST direct. |
-| Sessions | Rotation/révocation, expiration et impossibilité de restaurer une session révoquée par une requête encore en cours. |
-| Réessais | Même clé/contenu retrouvé ; contenu différent refusé 409, sans nouvel appel de procédure, avec connexion instrumentée. |
-| Serveur HTTP local réel | `/connexion`, CSS et JS : 200 et `no-store` ; accès non authentifié : redirection ; POST sans CSRF : 400. Serveur arrêté. |
-| `check-db` via le runner CLI Flask | Tenté avec configuration chargée et clé/session temporaires : échec `OperationalError` 2003, connexion MySQL indisponible. |
-| `docker version` | Client présent ; moteur inaccessible, pipe `docker_engine` absent. |
-| PHP / Composer | Aucun exécutable trouvé ; aucun code PHP ni `composer.json` dans le projet. Commandes PHP non applicables. |
+Aucun serveur MySQL disponible n'a été trouvé dans cet environnement. Les tests
+réels de procédure, contraintes, atomicité et concurrence restent donc non exécutés.
+Le rendu interactif, le comportement JavaScript et la présentation responsive
+restent également à vérifier dans un navigateur.
 
-Les comptes futurs/expirés, les contraintes, la procédure, la transaction réelle,
-la concurrence, la perte simulée de réponse après commit, les périmètres SQL et
-la pagination sur MySQL restent **non testés dans cet environnement**. Leurs cas
-opt-in n'ont pas été activés. Les tests locaux de rollback de création vérifient
-les appels du code ; ils ne prouvent pas l'atomicité MySQL. Le rollback SQLite
-des sessions a été réellement exécuté.
-
-La vérification HTTP locale ne remplace pas un navigateur interactif : les
-interactions JavaScript, le double clic visuel et le rendu responsive restent
-à vérifier. Aucun script SQL métier n'a été modifié, aucune nouvelle dépendance
-n'a été ajoutée. Voir le [rapport de revue](revue.md) et le
-[guide stagiaire](guide-stagiaire.md).
+Voir [l'installation](implementation.md), le [guide stagiaire](guide-stagiaire.md)
+et le [rapport de correction](revue.md).

@@ -1,7 +1,7 @@
 # Écrans, données et organisation technique
 
 Les écrans E01 à E04 disposent désormais d'une première implémentation
-Python/Flask ; les écrans des lots suivants restent à développer. Leur
+PHP/PDO ; les écrans des lots suivants restent à développer. Leur
 visibilité et leurs actions dépendent des permissions explicitement configurées.
 La [matrice métier](03-profils-validation.md) reste une proposition ; voir le
 [fonctionnement livré](../implementation.md) pour la politique technique de démonstration.
@@ -112,7 +112,7 @@ identifiant de connexion unique.
 | MySQL | Stocker, garantir clés étrangères et unicité, appliquer les contraintes de dates et gérer le compteur. |
 | Source RH / import | Fournir personnel, comptes ou affectations selon D14 ; intégration non existante dans le dépôt. |
 
-L'implémentation Flask/PyMySQL conserve ces contrats de données. Elle n'invente
+L'implémentation PHP/PDO conserve ces contrats de données. Elle n'invente
 ni service RH ni import disponible ; leur préparation reste soumise à D14.
 
 ## Vérifications techniques avant développement

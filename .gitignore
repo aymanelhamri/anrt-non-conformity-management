@@ -5,3 +5,5 @@ __pycache__/
 instance/
 *.pyc
 .coverage
+.tools/
+vendor/
