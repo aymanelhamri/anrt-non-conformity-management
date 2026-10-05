@@ -1,0 +1,11 @@
+{
+  "RESPONSABLE": {
+    "create": true,
+    "read": ["own", "assigned"],
+    "audit": ["own", "assigned"],
+    "assign": "self"
+  },
+  "CONSULTATION": {
+    "read": ["own", "assigned"]
+  }
+}

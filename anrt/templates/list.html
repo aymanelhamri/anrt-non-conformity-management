@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Non-conformités · ANRT{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">SUIVI QUALITÉ</p><h1>Non-conformités</h1><p class="muted">Retrouvez les dossiers de votre périmètre.</p></div>{% if may_create %}<a class="button primary" href="{{ url_for('web.nc_new') }}">+ Nouvelle non-conformité</a>{% endif %}</div>
+<form class="card filters" method="get">
+  <div><label for="reference">Référence</label><input id="reference" name="reference" maxlength="50" placeholder="NC-SI-…" value="{{ filters.reference }}"></div>
+  <div><label for="processus_id">Processus</label><select id="processus_id" name="processus_id"><option value="">Tous les processus</option>{% for p in options.processus %}<option value="{{ p.id }}" {% if filters.processus_id == p.id|string %}selected{% endif %}>{{ p.code }} · {{ p.nom }}</option>{% endfor %}</select></div>
+  <div><label for="statut_code">Statut</label><select id="statut_code" name="statut_code"><option value="">Tous les statuts</option>{% for s in options.statuts %}<option value="{{ s.code }}" {% if filters.statut_code == s.code %}selected{% endif %}>{{ s.libelle }}</option>{% endfor %}</select></div>
+  <div><label for="responsable_matricule">Matricule du responsable</label><input id="responsable_matricule" name="responsable_matricule" maxlength="60" value="{{ filters.responsable_matricule }}"></div>
+  <div class="filter-actions"><button class="button primary" type="submit">Filtrer</button><a class="button quiet" href="{{ url_for('web.nc_list') }}">Réinitialiser</a></div>
+</form>
+<section class="card list-card"><div class="list-summary"><strong>{{ total }} dossier{% if total != 1 %}s{% endif %}</strong><span class="muted">Page {{ page }} sur {{ pages }}</span></div>
+{% if rows %}<div class="table-scroll"><table><thead><tr><th>Référence</th><th>Processus / Type</th><th>Responsable</th><th>Création</th><th>Échéance</th><th>Statut</th></tr></thead><tbody>
+{% for nc in rows %}<tr><td><a class="reference" href="{{ url_for('web.nc_detail', nc_id=nc.id) }}">{{ nc.reference }}</a></td><td>{{ nc.processus }}<small>{{ nc.type_nc }}</small></td><td>{{ nc.responsable or nc.responsable_matricule }}</td><td>{{ nc.date_creation.strftime('%d/%m/%Y') }}</td><td>{{ nc.date_echeance.strftime('%d/%m/%Y') if nc.date_echeance else 'Non renseignée' }}</td><td><span class="badge {{ nc.statut_code|lower }}">{{ nc.statut_code|replace('CLOTUREE','Clôturée')|replace('OUVERTE','Ouverte')|replace('AJOURNEE','Ajournée')|replace('ANNULEE','Annulée') }}</span></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="empty"><h2>Aucune non-conformité à afficher</h2><p class="muted">Aucun dossier de votre périmètre ne correspond à ces critères.</p></div>{% endif %}
+{% if pages > 1 %}<nav class="pagination" aria-label="Pagination">{% if page > 1 %}<a class="button quiet" href="{{ page_url(page - 1) }}">← Précédente</a>{% endif %}<span>Page {{ page }} / {{ pages }}</span>{% if page < pages %}<a class="button quiet" href="{{ page_url(page + 1) }}">Suivante →</a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}
