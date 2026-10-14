@@ -2,9 +2,9 @@
 <section class="login-layout">
     <div class="login-intro">
         <p class="eyebrow">ESPACE QUALITÉ</p>
-        <h1>Un espace commun pour suivre vos non-conformités.</h1>
-        <p>Enregistrez un constat, identifiez son responsable et retrouvez chaque dossier avec sa référence.</p>
-        <div class="intro-note">Déclaration · Consultation · Traçabilité</div>
+        <h1>Déclarez une non-conformité.</h1>
+        <p>Enregistrez un constat, renseignez sa prise en charge et obtenez sa référence.</p>
+        <div class="intro-note">Connexion · Déclaration · Confirmation</div>
     </div>
     <div class="card login-card">
         <h2>Connexion</h2><p class="muted">Connectez-vous avec votre compte personnel.</p>

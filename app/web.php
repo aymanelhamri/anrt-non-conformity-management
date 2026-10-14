@@ -19,12 +19,6 @@ function display_date(?string $value): string
     return $value ? (new DateTimeImmutable($value))->format('d/m/Y') : 'Non renseignée';
 }
 
-function display_time(string $value, array $config): string
-{
-    return (new DateTimeImmutable($value, new DateTimeZone('UTC')))
-        ->setTimezone(new DateTimeZone($config['timezone']))->format('d/m/Y H:i');
-}
-
 function redirect(string $url, int $status = 303): never
 {
     header('Location: ' . $url, true, $status);
@@ -55,15 +49,6 @@ function render(string $view, array $data, array $config, ?array $user = null): 
         throw $error;
     }
     require dirname(__DIR__) . '/templates/base.php';
-}
-
-function form_string(array $values, string $key, string $default = ''): string
-{
-    $value = $values[$key] ?? $default;
-    if (!is_string($value) || !mb_check_encoding($value, 'UTF-8')) {
-        throw new HttpError(400, 'Le formulaire ou les filtres contiennent une valeur invalide.');
-    }
-    return $value;
 }
 
 function decode_form(string $body): array
@@ -102,11 +87,6 @@ function read_post(): array
     return decode_form($body);
 }
 
-function page_url(array $filters, int $page): string
-{
-    return '/non-conformites?' . http_build_query([...array_filter($filters, static fn(string $v): bool => $v !== ''), 'page' => $page]);
-}
-
 function handle_request(array $config, ?PDO $pdo = null): void
 {
     $user = null;
@@ -129,7 +109,7 @@ function handle_request(array $config, ?PDO $pdo = null): void
             throw new HttpError(405, 'Méthode non autorisée.');
         }
         if ($path === '/') {
-            redirect('/non-conformites', 302);
+            redirect('/non-conformites/nouvelle', 302);
         }
         if ($path === '/connexion') {
             $error = null;
@@ -150,7 +130,7 @@ function handle_request(array $config, ?PDO $pdo = null): void
                     }
                     if ($authenticated) {
                         sign_in($authenticated);
-                        redirect('/non-conformites');
+                        redirect('/non-conformites/nouvelle');
                     }
                     http_response_code(401);
                     $error = 'Identifiants incorrects ou compte hors période de validité.';
@@ -163,9 +143,8 @@ function handle_request(array $config, ?PDO $pdo = null): void
             sign_out($config);
             redirect('/connexion');
         }
-        $detailId = preg_match('#^/non-conformites/([0-9]+)$#D', (string) $path, $match) ? uint($match[1]) : null;
-        if (!in_array($path, ['/non-conformites', '/non-conformites/nouvelle'], true) && $detailId === null) {
-            throw new HttpError(404, 'Dossier ou page introuvable.');
+        if (!in_array($path, ['/non-conformites/nouvelle', '/non-conformites/confirmation'], true)) {
+            throw new HttpError(404, 'Page introuvable.');
         }
         $matricule = $_SESSION['matricule'] ?? null;
         if ($matricule) {
@@ -176,31 +155,23 @@ function handle_request(array $config, ?PDO $pdo = null): void
             sign_out($config);
             redirect('/connexion', 302);
         }
-        if ($path === '/non-conformites') {
-            [$scope] = scope_sql($user, $config);
-            if ($scope === '0=1') {
-                throw new HttpError(403, "Aucun droit de consultation n'est configuré pour votre compte.");
+        if (!can_create($user, $config)) {
+            throw new HttpError(403, 'Votre compte ne peut pas créer de non-conformité.');
+        }
+        if ($path === '/non-conformites/confirmation') {
+            $confirmation = $_SESSION['nc_confirmation'] ?? null;
+            if (!is_array($confirmation) || !is_string($confirmation['reference'] ?? null)) {
+                redirect('/non-conformites/nouvelle');
             }
-            $page = uint(form_string($_GET, 'page', '1'));
-            if ($page === null) {
-                throw new HttpError(400, 'Numéro de page invalide.');
-            }
-            $filters = [];
-            foreach (['reference', 'processus_id', 'statut_code', 'responsable_matricule'] as $field) {
-                $filters[$field] = form_string($_GET, $field);
-            }
-            $result = list_nc($pdo, $config, $user, $filters, $page);
-            $options = nc_choices($pdo, $config, $user, true);
-            $mayCreate = can_create($user, $config);
-            render('list', [...$result, ...compact('filters', 'options', 'mayCreate')], $config, $user);
+            render('confirmation', compact('confirmation'), $config, $user);
             return;
         }
         if ($path === '/non-conformites/nouvelle') {
-            if (!can_create($user, $config)) {
-                throw new HttpError(403, 'Votre compte ne peut pas créer de non-conformité.');
-            }
             if (!$config['demo'] && !$config['initial_rules_confirmed']) {
                 throw new HttpError(403, 'La création attend la confirmation des règles de saisie initiale.');
+            }
+            if ($method !== 'POST') {
+                unset($_SESSION['nc_confirmation']);
             }
             $values = [];
             foreach (NC_FIELDS as $field) {
@@ -213,9 +184,9 @@ function handle_request(array $config, ?PDO $pdo = null): void
                     if (array_diff(array_keys($post), [...NC_FIELDS, 'csrf_token', 'submission_token'])) {
                         throw new FormError(['form' => 'Le formulaire contient des champs non autorisés.'], 400);
                     }
-                    [$id, $replayed] = create_nc($pdo, $config, $user, $values, $submission, $_SERVER['REMOTE_ADDR'] ?? null);
-                    $_SESSION['flash'] = $replayed ? 'Enregistrement retrouvé : votre non-conformité avait déjà été créée.' : 'Votre non-conformité a été enregistrée.';
-                    redirect('/non-conformites/' . $id);
+                    [, $replayed, $reference] = create_nc($pdo, $config, $user, $values, $submission, $_SERVER['REMOTE_ADDR'] ?? null);
+                    $_SESSION['nc_confirmation'] = compact('reference', 'replayed');
+                    redirect('/non-conformites/confirmation');
                 } catch (FormError $error) {
                     $errors = $error->errors;
                     http_response_code($error->status);
@@ -236,11 +207,6 @@ function handle_request(array $config, ?PDO $pdo = null): void
             render('new', compact('values', 'errors', 'submission', 'options', 'today'), $config, $user);
             return;
         }
-        [$nc, $audit] = detail_nc($pdo, $config, $user, $detailId);
-        if ($nc === null) {
-            throw new HttpError(404, 'Dossier introuvable ou non autorisé.');
-        }
-        render('detail', compact('nc', 'audit'), $config, $user);
     } catch (FormError $error) {
         http_response_code($error->status);
         render('error', ['message' => implode(' ', $error->errors)], $config, $user);

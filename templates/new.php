@@ -4,7 +4,6 @@ $fieldError = static function (string $name) use ($errors): string {
     return isset($errors[$name]) ? '<p class="field-error" id="' . e($name) . '-error">' . e($errors[$name]) . '</p>' : '';
 };
 ?>
-<a class="back" href="/non-conformites">← Non-conformités</a>
 <div class="page-heading"><div><p class="eyebrow">NOUVELLE DÉCLARATION</p><h1>Enregistrer une non-conformité</h1><p class="muted">Les champs marqués d’un * sont obligatoires.</p></div></div>
 <?php if ($errors): ?>
     <div class="notice error" role="alert"><strong>Votre déclaration n’a pas pu être confirmée.</strong><p><?= e($errors['form'] ?? 'Vérifiez les champs indiqués. Votre saisie a été conservée.') ?></p></div>
@@ -68,5 +67,5 @@ $fieldError = static function (string $name) use ($errors): string {
         <span>Date de création : <strong><?= e(display_date($today)) ?></strong></span>
         <span>Statut initial : <strong>Ouverte</strong></span><span>La référence sera attribuée à l’enregistrement.</span>
     </section>
-    <div class="form-actions"><a class="button quiet" href="/non-conformites" data-cancel>Annuler</a><button class="button primary" type="submit" data-submit>Enregistrer la non-conformité</button></div>
+    <div class="form-actions"><a class="button quiet" href="/non-conformites/nouvelle" data-cancel>Recommencer</a><button class="button primary" type="submit" data-submit>Enregistrer la non-conformité</button></div>
 </form>

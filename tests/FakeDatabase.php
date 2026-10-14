@@ -78,7 +78,6 @@ class FakeDatabase extends PDO
         }
         if (str_contains($sql, 'SELECT id, code, nom')) { return [['id' => 1, 'code' => 'PO', 'nom' => 'Politique']]; }
         if (str_contains($sql, 'SELECT id, libelle')) { return [['id' => 1, 'libelle' => 'Autre']]; }
-        if (str_contains($sql, 'SELECT code, libelle FROM statuts')) { return [['code' => 'OUVERTE', 'libelle' => 'Ouverte']]; }
         if (str_contains($sql, 'SELECT id FROM') || str_contains($sql, 'SELECT p.matricule')) { return $this->referencesValid ? [['id' => 1, 'matricule' => '00017', 'nom_prenom' => 'Compte test']] : []; }
         if (str_contains($sql, 'CALL generer_reference')) { return []; }
         if (str_contains($sql, 'SELECT derniere_valeur')) { return [[$this->number]]; }
@@ -90,22 +89,6 @@ class FakeDatabase extends PDO
             $this->audit = $values;
             return [];
         }
-        if (str_contains($sql, 'SELECT COUNT(*) FROM non_conformites')) { return [[$this->insert ? 1 : 0]]; }
-        if (str_contains($sql, 'FROM non_conformites nc')) {
-            if (!$this->insert || str_contains($sql, '0=1')) { return []; }
-            if (str_contains($sql, 'nc.id=?') && $values[0] !== 41) { return []; }
-            if (str_contains($sql, 'SELECT nc.id FROM')) { return [['id' => 41]]; }
-            return [[
-                'id' => 41, 'reference' => $this->insert[0], 'processus_id' => 1, 'processus_code' => 'PO',
-                'processus' => 'Politique', 'type_nc' => 'Autre', 'nature_service' => 'Autre',
-                'responsable' => 'Compte test', 'responsable_matricule' => $this->insert[7],
-                'declarant' => 'Compte test', 'enregistree_par_matricule' => $this->insert[4],
-                'description' => $this->insert[5], 'traitement' => $this->insert[6],
-                'date_creation' => $this->insert[8], 'date_echeance' => $this->insert[9],
-                'statut_code' => 'OUVERTE', 'statut' => 'Ouverte', 'updated_at' => '2026-10-05 12:00:00',
-            ]];
-        }
-        if (str_contains($sql, 'SELECT j.operation')) { return [['operation' => 'CREATION', 'created_at' => '2026-10-05 12:00:00', 'acteur_matricule' => '00017', 'acteur' => 'Compte test']]; }
         throw new RuntimeException('SQL non pris en charge par le double de test.');
     }
 }

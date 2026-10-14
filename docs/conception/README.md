@@ -1,55 +1,26 @@
-# Conception de l'application ANRT Qualité
+# Conception du premier parcours
 
-Version de travail du 5 octobre 2026, initialement préparée avant le développement.
-Ce dossier reste une spécification proposée, pas une validation des règles métier.
-Le premier parcours dispose désormais d'une [implémentation](../implementation.md),
-dont la [recette MySQL](../verification.md) reste à exécuter.
+Ce dossier décrit les besoins, les fonctionnalités, leur enchaînement et les
+écrans du formulaire de non-conformité. Le parcours de travail est :
+**connexion → formulaire → contrôles → enregistrement → confirmation**.
 
-## Lecture et livrables
+Le formulaire NC est l'option actuellement développée. La superviseure a
+proposé de commencer par l'administration ou par un formulaire d'enregistrement.
+Le choix de cette option et le périmètre officiel des jalons restent à confirmer
+dans D01/D02 ; ce dossier ne vaut pas approbation.
 
-| Document | Objet |
+| Document | Contenu |
 | --- | --- |
-| [01 — Cadrage et existant](01-cadrage.md) | Objectif, besoins, périmètre et capacités réellement présentes. |
-| [02 — Processus de non-conformité](02-processus-non-conformite.md) | Acteurs, étapes, exceptions, statuts et traçabilité. |
-| [03 — Profils et validation](03-profils-validation.md) | Matrice de permissions et conception du circuit de validation. |
-| [04 — Écrans et données](04-ecrans-donnees.md) | Navigation, contenu des écrans, types SQL et responsabilités techniques. |
-| [05 — Lots et recette](05-lots-recette.md) | Premier développement proposé et critères d'acceptation. |
-| [06 — Décisions à confirmer](06-decisions.md) | Questions, impacts et réponses attendues de la responsable. |
+| [01 — Besoins](01-cadrage.md) | Objectif, existant et fonctions du premier parcours. |
+| [02 — Processus](02-processus-non-conformite.md) | Étapes de la saisie à la confirmation et traitement des erreurs. |
+| [03 — Accès](03-profils-validation.md) | Compte, création et choix du responsable. |
+| [04 — Écrans et champs](04-ecrans-donnees.md) | Connexion, formulaire, confirmation et contraintes des données. |
+| [05 — Recette](05-lots-recette.md) | Vérifications du premier parcours. |
+| [06 — Questions](06-decisions.md) | Points nécessaires à confirmer avec la superviseure. |
 
-## Convention de lecture
+Les scripts SQL antérieurs sont conservés. Ils décrivent aussi d'autres objets
+du projet global ; leur présence ne signifie pas que leurs fonctionnalités
+sont réalisées. Les étapes ultérieures restent à définir.
 
-- **Constat** : information présente dans les fichiers du dépôt.
-- **Orientation connue** : information communiquée par le porteur du projet.
-- **Proposition** : solution de travail qui doit être examinée.
-- **À confirmer** : règle non établie, identifiée par une décision `Dxx`.
-
-Les identifiants `Bxx` désignent les besoins, `Fxx` les fonctions, `Rxx` les
-règles proposées et `CAxx` les critères de recette. Les références entre
-documents permettent de relier une fonction à son besoin et à sa vérification.
-
-## Parcours retenu pour la conception
-
-**Proposition — D01 :** commencer par enregistrer et consulter une non-conformité
-(NC), puis étendre le parcours à son traitement, à sa vérification et à sa
-clôture. Les actions restent des objets distincts pouvant être associés aux NC.
-Le choix NC/action/les deux reste ouvert.
-
-Le traitement et le responsable sont obligatoires dans le schéma actuel. Un
-parcours de déclaration sans ces informations dépend d'une décision métier
-(D03), puis d'une adaptation du modèle explicitement revue si elle est nécessaire.
-
-Les scripts SQL existants restent la référence pour les types et longueurs.
-Ils ne sont ni modifiés ni exécutés par cette conception. Les besoins de stockage
-supplémentaires, notamment pour les validations métier, sont identifiés sans
-introduire de migration anticipée.
-
-## Préparation de la revue
-
-1. Choisir le premier objet métier et le périmètre du deuxième jalon (D01, D02).
-2. Définir les données disponibles dès l'enregistrement (D03, D04).
-3. Fixer les permissions et les règles de validation (D05 à D10).
-4. Définir les conditions de clôture et le lien avec les actions (D11, D12).
-5. Compléter les décisions de référence et de préparation des données (D13, D14).
-
-Les réponses peuvent être consignées dans la colonne « Réponse / date » du
-[registre des décisions](06-decisions.md). Aucune case vide ne vaut accord.
+L'[installation](../implementation.md) explique comment essayer le formulaire.
+Les [vérifications](../verification.md) distinguent tests exécutés et limites.

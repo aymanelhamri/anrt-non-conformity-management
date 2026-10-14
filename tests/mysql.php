@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 if (getenv('TEST_MYSQL') !== '1') {
-    echo "13 cas MySQL non exécutés : activation explicite TEST_MYSQL=1 requise.\n";
+    echo "12 cas MySQL non exécutés : activation explicite TEST_MYSQL=1 requise.\n";
     exit(0);
 }
 if (getenv('TEST_MYSQL_PASSWORD') === false) {
@@ -74,11 +74,11 @@ $tests['Comptes valides, futurs, expirés et révocation'] = function (PDO $pdo,
 };
 $tests['Création, audit et réessais'] = function (PDO $pdo, array $config): void {
     $token = new_submission(mysql_user(), $config);
-    [$id, $replayed] = create_nc($pdo, $config, mysql_user(), mysql_values(), $token, null);
-    ensure(!$replayed && create_nc($pdo, $config, mysql_user(), mysql_values(), $token, null) === [$id, true]);
+    [$id, $replayed, $reference] = create_nc($pdo, $config, mysql_user(), mysql_values(), $token, null);
+    ensure(!$replayed && create_nc($pdo, $config, mysql_user(), mysql_values(), $token, null) === [$id, true, $reference]);
     ensure(mysql_counts($pdo) === [1, 1, 1]);
-    [$nc, $audit] = detail_nc($pdo, $config, mysql_user(), $id);
-    ensure($nc['statut_code'] === 'OUVERTE' && count($audit) === 1);
+    $nc = query($pdo, 'SELECT reference, statut_code FROM non_conformites WHERE id=?', [$id])->fetch();
+    ensure($nc['reference'] === $reference && $nc['statut_code'] === 'OUVERTE');
     expect_failure(fn() => create_nc($pdo, $config, mysql_user(), [...mysql_values(), 'description' => 'autre'], $token, null), FormError::class);
     ensure(mysql_counts($pdo) === [1, 1, 1]);
 };
@@ -115,8 +115,8 @@ $tests['Réponse perdue après commit réel'] = function (PDO $pdo, array $confi
 $tests['Références 999 et 1000'] = function (PDO $pdo, array $config): void {
     query($pdo, "INSERT INTO compteurs_reference VALUES ('NC',1,?,998)", [(int) substr(business_today($config), 0, 4)]);
     ensure(query($pdo, "SELECT LPAD('1000',3,'0')")->fetchColumn() === '100');
-    [$id] = create_nc($pdo, $config, mysql_user(), mysql_values(), new_submission(mysql_user(), $config), null);
-    ensure(str_contains(detail_nc($pdo, $config, mysql_user(), $id)[0]['reference'], '-999-'));
+    [$id, $replayed, $reference] = create_nc($pdo, $config, mysql_user(), mysql_values(), new_submission(mysql_user(), $config), null);
+    ensure(str_contains($reference, '-999-'));
     expect_failure(fn() => create_nc($pdo, $config, mysql_user(), mysql_values(), new_submission(mysql_user(), $config), null), FormError::class);
     ensure((int) query($pdo, 'SELECT derniere_valeur FROM compteurs_reference')->fetchColumn() === 999);
 };
@@ -132,23 +132,6 @@ $tests['Référence inactive et affectation interdite'] = function (PDO $pdo, ar
     query($pdo, 'UPDATE types_nc SET actif=TRUE WHERE id=1');
     expect_failure(fn() => create_nc($pdo, $config, mysql_user(), [...mysql_values(), 'responsable_matricule' => '00018'], new_submission(mysql_user(), $config), null), FormError::class);
     ensure(mysql_counts($pdo) === [0, 0, 0]);
-};
-$tests['Périmètres, filtres, pagination et historique inactif'] = function (PDO $pdo, array $config): void {
-    $ids = [];
-    for ($i = 0; $i < 21; $i++) { $ids[] = create_nc($pdo, $config, mysql_user(), mysql_values(), new_submission(mysql_user(), $config), null)[0]; }
-    $other = [...mysql_user(), 'matricule' => '00018'];
-    [$otherId] = create_nc($pdo, $config, $other, [...mysql_values(), 'responsable_matricule' => '00018'], new_submission($other, $config), null);
-    $first = list_nc($pdo, $config, mysql_user(), [], 1);
-    $second = list_nc($pdo, $config, mysql_user(), [], 2);
-    ensure($first['total'] === 21 && count($first['rows']) === 20 && count($second['rows']) === 1);
-    ensure(!array_intersect(array_column($first['rows'], 'id'), array_column($second['rows'], 'id')));
-    ensure(detail_nc($pdo, $config, mysql_user(), $otherId) === [null, []]);
-    foreach (['responsable_matricule' => '00018', 'statut_code' => 'CLOTUREE'] as $field => $value) { ensure(list_nc($pdo, $config, mysql_user(), [$field => $value], 1)['total'] === 0); }
-    $reference = detail_nc($pdo, $config, mysql_user(), $ids[0])[0]['reference'];
-    ensure(list_nc($pdo, $config, mysql_user(), ['reference' => $reference], 1)['total'] === 1);
-    query($pdo, 'UPDATE processus SET actif=FALSE WHERE id=1');
-    ensure(detail_nc($pdo, $config, mysql_user(), $ids[0])[0]['id'] == $ids[0]);
-    ensure(list_nc($pdo, $config, mysql_user(), ['processus_id' => '1'], 1)['total'] === 21);
 };
 
 $failures = 0;

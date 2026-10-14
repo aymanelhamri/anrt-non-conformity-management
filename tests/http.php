@@ -76,9 +76,13 @@ function test_http(bool $instrumented): int
             [$status] = http_call($port, $path, $cookies);
             http_check($status === 404, 'Fichier privé exposé'); $tests++;
         }
-        foreach (['/non-conformites', '/non-conformites/nouvelle', '/non-conformites/1'] as $path) {
+        foreach (['/non-conformites/nouvelle', '/non-conformites/confirmation'] as $path) {
             [$status, $headers] = http_call($port, $path, $cookies);
             http_check($status === 302 && str_contains($headers, 'Location: /connexion'), 'Accès sans authentification'); $tests++;
+        }
+        foreach (['/non-conformites', '/non-conformites/1'] as $path) {
+            [$status] = http_call($port, $path, $cookies);
+            http_check($status === 404, 'Ancienne consultation indisponible'); $tests++;
         }
         [$status] = http_call($port, '/connexion', $cookies, 'matricule=00017&password=secret');
         http_check($status === 400, 'Connexion sans CSRF'); $tests++;
@@ -90,9 +94,9 @@ function test_http(bool $instrumented): int
         $beforeLogin = $cookies['anrt_session'];
         $payload = http_build_query(['csrf_token' => html_token($html, 'csrf_token'), 'matricule' => '00017', 'password' => 'Test-secret']);
         [$status, $headers] = http_call($port, '/connexion', $cookies, $payload);
-        http_check($status === 303 && str_contains($headers, 'Location: /non-conformites') && $cookies['anrt_session'] !== $beforeLogin, 'Connexion et rotation'); $tests++;
-        [$status, , $html] = http_call($port, '/non-conformites', $cookies);
-        http_check($status === 200 && str_contains($html, 'Aucune non-conformité'), 'Liste vide'); $tests++;
+        http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/nouvelle') && $cookies['anrt_session'] !== $beforeLogin, 'Connexion et rotation'); $tests++;
+        [$status, $headers] = http_call($port, '/non-conformites/confirmation?reference=NC-SECRET&id=99', $cookies);
+        http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/nouvelle'), 'Confirmation inaccessible sans création en session'); $tests++;
         [$status, , $html] = http_call($port, '/non-conformites/nouvelle', $cookies);
         http_check($status === 200 && str_contains($html, 'Enregistrer une non-conformité'), 'Formulaire'); $tests++;
         $payload = ['csrf_token' => html_token($html, 'csrf_token'), 'submission_token' => html_token($html, 'submission_token'),
@@ -106,11 +110,17 @@ function test_http(bool $instrumented): int
         [$status] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query($payload) . '&description=autre');
         http_check($status === 400, 'Champ répété'); $tests++;
         [$status, $headers] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query($payload));
-        http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/41'), 'Création'); $tests++;
-        [$status, , $html] = http_call($port, '/non-conformites/41', $cookies);
-        http_check($status === 200 && str_contains($html, 'Votre non-conformité a été enregistrée.') && str_contains($html, '&lt;script&gt;constat&lt;/script&gt;') && str_contains($html, 'Historique'), 'Confirmation, fiche, échappement et audit'); $tests++;
+        http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/confirmation'), 'Création'); $tests++;
+        [$status, , $html] = http_call($port, '/non-conformites/confirmation?reference=NC-SECRET&id=99', $cookies);
+        http_check($status === 200 && str_contains($html, 'Votre non-conformité a été enregistrée.') && str_contains($html, 'NC-PO-001-26') && !str_contains($html, 'NC-SECRET'), 'Confirmation de la référence créée en session'); $tests++;
+        foreach (['/non-conformites?reference=NC-PO', '/non-conformites/41', '/non-conformites/99'] as $path) {
+            [$status] = http_call($port, $path, $cookies);
+            http_check($status === 404, 'Consultation retirée même après connexion'); $tests++;
+        }
         [$status] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query($payload));
         http_check($status === 303, 'Double soumission'); $tests++;
+        [$status, , $html] = http_call($port, '/non-conformites/confirmation', $cookies);
+        http_check($status === 200 && str_contains($html, 'Enregistrement retrouvé') && str_contains($html, 'NC-PO-001-26'), 'Référence conservée après réessai'); $tests++;
         [$status] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query([...$payload, 'description' => 'autre contenu']));
         http_check($status === 409, 'Réessai avec contenu différent'); $tests++;
         foreach (['PILOTE_PROCESSUS', 'CONSULTATION'] as $profile) {
@@ -120,28 +130,28 @@ function test_http(bool $instrumented): int
             http_check($status === 403, 'POST interdit au profil'); $tests++;
         }
         foreach (['ADMINISTRATEUR', 'PILOTE_PROCESSUS', 'RESPONSABLE', 'CONSULTATION'] as $profile) {
-            [$status] = http_call($port, '/non-conformites', $cookies, null, ['X-Test-Profile' => $profile, 'X-Test-Closed' => 'true']);
+            [$status] = http_call($port, '/non-conformites/nouvelle', $cookies, null, ['X-Test-Profile' => $profile, 'X-Test-Closed' => 'true']);
             http_check($status === 403, 'Refus par défaut'); $tests++;
         }
-        [$status] = http_call($port, '/non-conformites/99', $cookies);
-        http_check($status === 404, 'Fiche absente'); $tests++;
         // Vieillir la session native de recette, puis vérifier son refus en HTTP.
         $expire = proc_open([PHP_BINARY, '-r',
             'session_save_path($argv[1]); session_name("anrt_session"); session_id($argv[2]); session_start(); $_SESSION["last_activity"]=time()-1801; session_write_close();',
             $folder, $cookies['anrt_session']], [['pipe', 'r'], ['file', $folder . '/server.log', 'a'], ['file', $folder . '/server.log', 'a']], $expirePipes);
         fclose($expirePipes[0]);
         http_check(proc_close($expire) === 0, 'Préparation expiration');
-        [$status] = http_call($port, '/non-conformites', $cookies);
+        [$status] = http_call($port, '/non-conformites/nouvelle', $cookies);
         http_check($status === 302 && !isset($cookies['anrt_session']), 'Expiration effective de la session'); $tests++;
         [, , $html] = http_call($port, '/connexion', $cookies);
         [$status] = http_call($port, '/connexion', $cookies, http_build_query(['csrf_token' => html_token($html, 'csrf_token'), 'matricule' => '00017', 'password' => 'Test-secret']));
         http_check($status === 303, 'Reconnexion après expiration'); $tests++;
+        [$status, $headers] = http_call($port, '/non-conformites/confirmation', $cookies);
+        http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/nouvelle'), 'Ancienne confirmation absente après reconnexion'); $tests++;
         $active = $cookies['anrt_session'];
-        [, , $html] = http_call($port, '/non-conformites/41', $cookies);
+        [, , $html] = http_call($port, '/non-conformites/nouvelle', $cookies);
         [$status] = http_call($port, '/deconnexion', $cookies, http_build_query(['csrf_token' => html_token($html, 'csrf_token')]));
         http_check($status === 303 && !isset($cookies['anrt_session']), 'Déconnexion'); $tests++;
         $replay = ['anrt_session' => $active];
-        [$status] = http_call($port, '/non-conformites', $replay);
+        [$status] = http_call($port, '/non-conformites/nouvelle', $replay);
         http_check($status === 302, 'Cookie révoqué non réutilisable'); $tests++;
         return $tests;
     } finally {

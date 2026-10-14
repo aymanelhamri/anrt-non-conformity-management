@@ -1,11 +1,45 @@
-# Vérifications PHP du 5 octobre 2026
+# Vérifications du formulaire PHP
+
+## Parcours simplifié — 14 octobre 2026
+
+Ces contrôles portent sur le parcours actuel : connexion → formulaire NC →
+enregistrement → confirmation de la référence dans la session → nouvelle
+déclaration ou déconnexion. Ils ont été exécutés avec les outils de `.tools/`.
+
+| Commande / scénario | Résultat réellement obtenu |
+| --- | --- |
+| `composer validate --strict` | Manifest et verrou valides. |
+| `composer test` | **62 tests PHP locaux**, **41 contrôles HTTP avec PDO instrumenté** et **14 contrôles HTTP via le point d'entrée public**, tous réussis. |
+| `php -l` sur les 21 fichiers PHP | Aucune erreur de syntaxe. |
+| `git diff --check` | Aucune erreur ; avis de conversion LF/CRLF Windows uniquement. |
+| Comparaison des scripts SQL et de `docs/modele-donnees.md` | Aucun changement. |
+
+Les contrôles HTTP vérifient notamment la confirmation limitée à la création
+liée à la session, son indisponibilité avant création ou après reconnexion,
+et le refus des anciennes routes de consultation, même pour un compte connecté.
+Ils exécutent de vrais serveurs PHP locaux, avec un PDO instrumenté pour les
+opérations métier : ils ne prouvent pas leur stockage réel ni l'atomicité MySQL.
+
+Les **12 cas MySQL** adaptés au premier parcours sont préparés mais n'ont pas
+été exécutés. La procédure, les contraintes, les transactions et la concurrence
+restent à vérifier sur un serveur de recette. Aucun contrôle interactif dans
+un navigateur n'a été effectué ; le rendu et le comportement JavaScript restent
+à vérifier.
+
+## Historique — ancienne version élargie du 5 octobre 2026
+
+Les résultats ci-dessous sont conservés comme compte rendu historique. Ils
+concernent l'ancienne version avec liste, filtres, pagination, fiche et audit
+visible. **Ils ne constituent pas des preuves de vérification du parcours
+simplifié actuel.**
 
 Environnement de vérification : Windows, **PHP 8.5.11 64 bits**, Composer 2.10.3.
 Les exécutables officiels ont été téléchargés dans `.tools/`, puis leurs
 empreintes SHA-256 ont été vérifiées. Ce dossier est ignoré par Git.
 
 Les anciens résultats Flask/Python sont dans l'historique Git ; ils ne constituent
-pas des résultats de tests PHP. Les contrôles ci-dessous portent sur le portage.
+pas des résultats de tests PHP. Les contrôles ci-dessous portaient sur cette
+ancienne version PHP.
 
 | Commande / scénario | Résultat réellement obtenu |
 | --- | --- |
@@ -36,7 +70,7 @@ privés inaccessibles, les ressources et les pages sans authentification.
 Cela vérifie l'exécution PHP et les appels SQL, pas leur stockage réel. La
 validation des comptes futurs/expirés n'a pas été exécutée sur MySQL.
 
-## Recette restant à exécuter
+### Recette non exécutée à cette date
 
 Les 13 cas de `tests/mysql.php` sont portés depuis la suite précédente et restent
 opt-in. Ils créent des bases neuves au nom aléatoire, y appliquent les scripts,
@@ -50,5 +84,4 @@ réels de procédure, contraintes, atomicité et concurrence restent donc non ex
 Le rendu interactif, le comportement JavaScript et la présentation responsive
 restent également à vérifier dans un navigateur.
 
-Voir [l'installation](implementation.md), le [guide stagiaire](guide-stagiaire.md)
-et le [rapport de correction](revue.md).
+Voir le [guide d'installation actuel](implementation.md).

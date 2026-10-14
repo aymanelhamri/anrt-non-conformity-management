@@ -87,20 +87,21 @@ foreach (['ADMINISTRATEUR', 'PILOTE_PROCESSUS', 'RESPONSABLE', 'CONSULTATION'] a
     $tests['Profil refusé sans politique ' . $profile] = function () use ($user, $config, $profile): void {
         $closed = [...$config, 'permissions' => []];
         $actor = [...$user, 'profiles' => [$profile]];
-        check(!can_create($actor, $closed) && scope_sql($actor, $closed) === ['0=1', []]);
+        check(!can_create($actor, $closed) && assignment_sql($actor, $closed) === ['0=1', []]);
     };
 }
-$tests['CONSULTATION sans création ni audit en démo'] = function () use ($user, $config): void {
+$tests['CONSULTATION sans création ni affectation en démo'] = function () use ($user, $config): void {
     $actor = [...$user, 'profiles' => ['CONSULTATION']];
-    check(!can_create($actor, $config) && scope_sql($actor, $config, 'audit') === ['0=1', []]);
+    check(!can_create($actor, $config) && assignment_sql($actor, $config) === ['0=1', []]);
 };
-$tests['Périmètres own/assigned/process/all et profil inconnu'] = function () use ($user, $config): void {
-    [$sql, $args] = scope_sql($user, $config);
-    check(str_contains($sql, 'enregistree_par_matricule = ?') && $args === ['00017', '00017']);
-    [$sql, $args] = scope_sql([...$user, 'profiles' => ['PILOTE_PROCESSUS']], $config);
+$tests['Affectations self/process/all et profil inconnu'] = function () use ($user, $config): void {
+    [$sql, $args] = assignment_sql($user, $config);
+    check(str_contains($sql, 'p.matricule=?') && $args === ['00017']);
+    $config['permissions']['RESPONSABLE']['assign'] = 'process';
+    [$sql, $args] = assignment_sql($user, $config);
     check(str_contains($sql, 'processus_responsable') && $args === ['00017']);
-    check(scope_sql([...$user, 'profiles' => ['ADMINISTRATEUR']], $config) === ['1=1', []]);
-    check(scope_sql([...$user, 'profiles' => ['INCONNU']], $config) === ['0=1', []]);
+    check(assignment_sql([...$user, 'profiles' => ['ADMINISTRATEUR']], $config) === ['1=1', []]);
+    check(assignment_sql([...$user, 'profiles' => ['INCONNU']], $config) === ['0=1', []]);
 };
 $tests['Affectation limitée au processus choisi'] = function () use ($user, $config): void {
     $config['permissions']['RESPONSABLE']['assign'] = 'process';
@@ -108,7 +109,7 @@ $tests['Affectation limitée au processus choisi'] = function () use ($user, $co
     check(str_contains($sql, 'mine.processus_id=?') && $args === ['00017', 2]);
 };
 $tests['Politiques invalides refusées'] = function (): void {
-    foreach ([['RESPONSABLE' => ['read' => ['service']]], ['RESPONSABLE' => ['create' => true]], ['RESPONSABLE' => ['create' => 'true']]] as $policy) {
+    foreach ([['RESPONSABLE' => ['assign' => 'service']], ['RESPONSABLE' => ['assign' => ['self']]], ['RESPONSABLE' => ['create' => 'true']]] as $policy) {
         rejects(fn() => validate_policy($policy), RuntimeException::class);
     }
 };
@@ -131,7 +132,6 @@ $tests['Champs répétés, tableaux et UTF-8 invalide refusés'] = function (): 
     }
     check(decode_form('responsable_matricule=00017&description=Faits+%C3%A9') === ['responsable_matricule' => '00017', 'description' => 'Faits é']);
 };
-$tests['Pagination conserve les filtres'] = fn() => check(page_url(['reference' => 'NC-SI', 'statut_code' => 'OUVERTE'], 2) === '/non-conformites?reference=NC-SI&statut_code=OUVERTE&page=2');
 $tests['Limites persistantes IP/identifiant et expiration'] = function (): void {
     $path = sys_get_temp_dir() . '/anrt-login-test-' . bin2hex(random_bytes(8));
     mkdir($path, 0700);
@@ -167,7 +167,7 @@ $tests['SQL contrôle début, fin et profils'] = function (): void {
 };
 $tests['Création, une connexion, ordre et audit'] = function () use ($config, $user, $values): void {
     $pdo = new FakeDatabase();
-    check(create_nc($pdo, $config, $user, $values, new_submission($user, $config), '127.0.0.1') === [41, false]);
+    check(create_nc($pdo, $config, $user, $values, new_submission($user, $config), '127.0.0.1') === [41, false, 'NC-PO-001-26']);
     check($pdo->transactions === ['begin', 'commit']);
     check($pdo->insert[4] === '00017' && $pdo->insert[7] === '00017');
     $snapshot = json_decode($pdo->audit[2], true);
@@ -195,7 +195,7 @@ $tests['Double soumission et contenu différent'] = function () use ($config, $u
     create_nc($pdo, $config, $user, $values, $token, null);
     $pdo->previous = ['entite_id' => '41', 'nouvelles_valeurs' => $pdo->audit[2]];
     $pdo->calls = $pdo->transactions = [];
-    check(create_nc($pdo, $config, $user, $values, $token, null) === [41, true]);
+    check(create_nc($pdo, $config, $user, $values, $token, null) === [41, true, 'NC-PO-001-26']);
     check($pdo->transactions === ['begin', 'rollback']);
     rejects(fn() => create_nc($pdo, $config, $user, [...$values, 'description' => 'autre'], $token, null), FormError::class, 409);
     check(!array_filter($pdo->calls, fn(array $c): bool => str_contains($c[0], 'CALL generer_reference')));
@@ -207,7 +207,7 @@ $tests['Réponse de commit perdue puis récupération instrumentée'] = function
     rejects(fn() => create_nc($pdo, $config, $user, $values, $token, null), PDOException::class);
     $pdo->loseCommitResponse = false;
     $pdo->previous = ['entite_id' => '41', 'nouvelles_valeurs' => $pdo->audit[2]];
-    check(create_nc($pdo, $config, $user, $values, $token, null) === [41, true]);
+    check(create_nc($pdo, $config, $user, $values, $token, null) === [41, true, 'NC-PO-001-26']);
 };
 $tests['Refus métier avant transaction'] = function () use ($config, $user, $values): void {
     foreach ([['permissions' => []], ['initial_rules_confirmed' => false]] as $override) {

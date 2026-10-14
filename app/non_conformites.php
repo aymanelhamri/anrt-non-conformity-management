@@ -120,7 +120,7 @@ function create_nc(PDO $pdo, array $config, array $user, array $values, string $
                 throw new FormError(['form' => 'Ce formulaire a déjà enregistré un autre contenu. Ouvrez une nouvelle déclaration.'], 409);
             }
             $pdo->rollBack();
-            return [(int) $previous['entite_id'], true];
+            return [(int) $previous['entite_id'], true, $snapshot['reference']];
         }
         // Un succès d'hier reste récupérable avant de revalider l'échéance.
         $today = business_today($config);
@@ -167,7 +167,7 @@ function create_nc(PDO $pdo, array $config, array $user, array $values, string $
             VALUES (?,'CREATION','non_conformites',?,?,?)",
             [$user['matricule'], (string) $id, json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $address]);
         $pdo->commit();
-        return [$id, false];
+        return [$id, false, $reference];
     } catch (Throwable $error) {
         try {
             if ($pdo->inTransaction()) {
@@ -188,95 +188,14 @@ function create_nc(PDO $pdo, array $config, array $user, array $values, string $
     }
 }
 
-function nc_choices(PDO $pdo, array $config, array $user, bool $forList = false): array
+function nc_choices(PDO $pdo, array $config, array $user): array
 {
-    $tables = $forList ? ['processus' => 'id, code, nom']
-        : ['processus' => 'id, code, nom', 'types_nc' => 'id, libelle', 'natures_service' => 'id, libelle'];
+    $tables = ['processus' => 'id, code, nom', 'types_nc' => 'id, libelle', 'natures_service' => 'id, libelle'];
     $result = [];
     foreach ($tables as $table => $columns) {
-        $condition = $forList ? '1=1' : 'actif=TRUE';
-        $result[$table] = query($pdo, "SELECT $columns FROM $table WHERE $condition ORDER BY id")->fetchAll();
+        $result[$table] = query($pdo, "SELECT $columns FROM $table WHERE actif=TRUE ORDER BY id")->fetchAll();
     }
-    if ($forList) {
-        $result['statuts'] = query($pdo, 'SELECT code, libelle FROM statuts ORDER BY code')->fetchAll();
-    } else {
-        [$where, $parameters] = assignment_sql($user, $config);
-        $result['responsables'] = query($pdo, "SELECT p.matricule, p.nom_prenom FROM pers p WHERE $where ORDER BY p.nom_prenom, p.matricule", $parameters)->fetchAll();
-    }
+    [$where, $parameters] = assignment_sql($user, $config);
+    $result['responsables'] = query($pdo, "SELECT p.matricule, p.nom_prenom FROM pers p WHERE $where ORDER BY p.nom_prenom, p.matricule", $parameters)->fetchAll();
     return $result;
-}
-
-function list_nc(PDO $pdo, array $config, array $user, array $filters, int $requestedPage): array
-{
-    [$where, $parameters] = scope_sql($user, $config);
-    $clauses = [$where];
-    foreach (['reference' => 50, 'responsable_matricule' => 60] as $field => $maximum) {
-        if (mb_strlen($filters[$field] ?? '', 'UTF-8') > $maximum) {
-            throw new FormError([$field => "Ce filtre est limité à $maximum caractères."], 400);
-        }
-    }
-    if (($filters['reference'] ?? '') !== '') {
-        $clauses[] = 'LOCATE(?, nc.reference)>0';
-        $parameters[] = $filters['reference'];
-    }
-    if (($filters['processus_id'] ?? '') !== '') {
-        $process = uint($filters['processus_id']);
-        if ($process === null) {
-            throw new FormError(['processus_id' => 'Processus invalide.'], 400);
-        }
-        $clauses[] = 'nc.processus_id=?';
-        $parameters[] = $process;
-    }
-    if (($filters['statut_code'] ?? '') !== '') {
-        if (!in_array($filters['statut_code'], ['OUVERTE', 'AJOURNEE', 'CLOTUREE', 'ANNULEE'], true)) {
-            throw new FormError(['statut_code' => 'Statut invalide.'], 400);
-        }
-        $clauses[] = 'nc.statut_code=?';
-        $parameters[] = $filters['statut_code'];
-    }
-    if (($filters['responsable_matricule'] ?? '') !== '') {
-        $clauses[] = 'nc.responsable_matricule=?';
-        $parameters[] = $filters['responsable_matricule'];
-    }
-    $predicate = implode(' AND ', $clauses);
-    $pdo->beginTransaction();
-    try {
-        $total = (int) query($pdo, "SELECT COUNT(*) FROM non_conformites nc WHERE $predicate", $parameters)->fetchColumn();
-        $pages = max(1, (int) ceil($total / 20));
-        $page = min($requestedPage, $pages);
-        $rows = query($pdo, "SELECT nc.id, nc.reference, nc.date_creation, nc.date_echeance,
-            nc.statut_code, pr.nom AS processus, t.libelle AS type_nc,
-            p.nom_prenom AS responsable, nc.responsable_matricule
-            FROM non_conformites nc JOIN processus pr ON pr.id=nc.processus_id
-            JOIN types_nc t ON t.id=nc.type_nc_id JOIN pers p ON p.matricule=nc.responsable_matricule
-            WHERE $predicate ORDER BY nc.created_at DESC, nc.id DESC LIMIT ? OFFSET ?",
-            [...$parameters, 20, ($page - 1) * 20])->fetchAll();
-        return compact('rows', 'total', 'page', 'pages');
-    } finally {
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-    }
-}
-
-function detail_nc(PDO $pdo, array $config, array $user, int $id): array
-{
-    [$where, $parameters] = scope_sql($user, $config);
-    $nc = query($pdo, "SELECT nc.*, pr.code AS processus_code, pr.nom AS processus,
-        t.libelle AS type_nc, n.libelle AS nature_service, s.libelle AS statut,
-        responsible.nom_prenom AS responsable, declarant.nom_prenom AS declarant
-        FROM non_conformites nc JOIN processus pr ON pr.id=nc.processus_id
-        JOIN types_nc t ON t.id=nc.type_nc_id JOIN natures_service n ON n.id=nc.nature_service_id
-        JOIN statuts s ON s.code=nc.statut_code JOIN pers responsible ON responsible.matricule=nc.responsable_matricule
-        JOIN pers declarant ON declarant.matricule=nc.enregistree_par_matricule
-        WHERE nc.id=? AND $where", [$id, ...$parameters])->fetch();
-    if (!$nc) {
-        return [null, []];
-    }
-    [$auditWhere, $auditParameters] = scope_sql($user, $config, 'audit');
-    $mayAudit = query($pdo, "SELECT nc.id FROM non_conformites nc WHERE nc.id=? AND $auditWhere", [$id, ...$auditParameters])->fetch();
-    $audit = $mayAudit ? query($pdo, "SELECT j.operation, j.created_at, j.acteur_matricule, p.nom_prenom AS acteur
-        FROM journal_audit j LEFT JOIN pers p ON p.matricule=j.acteur_matricule
-        WHERE j.entite='non_conformites' AND j.entite_id=? ORDER BY j.created_at, j.id", [(string) $id])->fetchAll() : [];
-    return [$nc, $audit];
 }
