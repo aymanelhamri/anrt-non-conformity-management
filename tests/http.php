@@ -99,8 +99,14 @@ function test_http(bool $instrumented): int
         http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/nouvelle'), 'Confirmation inaccessible sans création en session'); $tests++;
         [$status, , $html] = http_call($port, '/non-conformites/nouvelle', $cookies);
         http_check($status === 200 && str_contains($html, 'Enregistrer une non-conformité'), 'Formulaire'); $tests++;
+        foreach (['processus_id' => 12, 'type_nc_id' => 8, 'nature_service_id' => 16] as $field => $count) {
+            preg_match('/<select id="' . $field . '"[^>]*>(.*?)<\/select>/s', $html, $select);
+            preg_match_all('/<option value="[0-9]+"/', $select[1] ?? '', $options);
+            http_check(count($options[0]) === $count, 'Référentiel complet du formulaire : ' . $field); $tests++;
+        }
+        http_check(str_contains($html, 'SI · Système d’information') && str_contains($html, 'Traitement de brouillage'), 'Libellés issus du référentiel'); $tests++;
         $payload = ['csrf_token' => html_token($html, 'csrf_token'), 'submission_token' => html_token($html, 'submission_token'),
-            'processus_id' => '1', 'type_nc_id' => '1', 'nature_service_id' => '1',
+            'processus_id' => '10', 'type_nc_id' => '1', 'nature_service_id' => '3',
             'responsable_matricule' => '00017', 'description' => '<script>constat</script>',
             'traitement' => 'Traitement réel', 'date_echeance' => ''];
         [$status, , $html] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query([...$payload, 'traitement' => '']));
@@ -112,7 +118,8 @@ function test_http(bool $instrumented): int
         [$status, $headers] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query($payload));
         http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/confirmation'), 'Création'); $tests++;
         [$status, , $html] = http_call($port, '/non-conformites/confirmation?reference=NC-SECRET&id=99', $cookies);
-        http_check($status === 200 && str_contains($html, 'Votre non-conformité a été enregistrée.') && str_contains($html, 'NC-PO-001-26') && !str_contains($html, 'NC-SECRET'), 'Confirmation de la référence créée en session'); $tests++;
+        $expectedReference = 'NC-SI-001-' . (new DateTimeImmutable('now', new DateTimeZone($environment['APP_TIMEZONE'] ?? 'Africa/Casablanca')))->format('y');
+        http_check($status === 200 && str_contains($html, 'Votre non-conformité a été enregistrée.') && str_contains($html, $expectedReference) && !str_contains($html, 'NC-SECRET'), 'Confirmation de la référence du processus choisi'); $tests++;
         foreach (['/non-conformites?reference=NC-PO', '/non-conformites/41', '/non-conformites/99'] as $path) {
             [$status] = http_call($port, $path, $cookies);
             http_check($status === 404, 'Consultation retirée même après connexion'); $tests++;
@@ -120,7 +127,7 @@ function test_http(bool $instrumented): int
         [$status] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query($payload));
         http_check($status === 303, 'Double soumission'); $tests++;
         [$status, , $html] = http_call($port, '/non-conformites/confirmation', $cookies);
-        http_check($status === 200 && str_contains($html, 'Enregistrement retrouvé') && str_contains($html, 'NC-PO-001-26'), 'Référence conservée après réessai'); $tests++;
+        http_check($status === 200 && str_contains($html, 'Enregistrement retrouvé') && str_contains($html, $expectedReference), 'Référence conservée après réessai'); $tests++;
         [$status] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query([...$payload, 'description' => 'autre contenu']));
         http_check($status === 409, 'Réessai avec contenu différent'); $tests++;
         foreach (['PILOTE_PROCESSUS', 'CONSULTATION'] as $profile) {

@@ -26,7 +26,7 @@ $fieldError = static function (string $name) use ($errors): string {
                             <option value="<?= e($values[$name]) ?>" selected>Sélection précédente indisponible</option>
                         <?php endif; ?>
                         <?php foreach ($options[$table] as $row): ?>
-                            <option value="<?= e($row['id']) ?>" <?= $values[$name] === (string) $row['id'] ? 'selected' : '' ?>><?= e($row[$textField]) ?></option>
+                            <option value="<?= e($row['id']) ?>" <?= $values[$name] === (string) $row['id'] ? 'selected' : '' ?>><?= e($table === 'processus' ? $row['code'] . ' · ' . $row[$textField] : $row[$textField]) ?></option>
                         <?php endforeach; ?>
                     </select><?= $fieldError($name) ?>
                 </div>

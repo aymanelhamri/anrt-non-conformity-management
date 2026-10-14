@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/reference_data.php';
+
 /** Connexion instrumentée : vérifie les appels PDO, jamais l'atomicité MySQL. */
 class FakeDatabase extends PDO
 {
@@ -18,9 +20,12 @@ class FakeDatabase extends PDO
     public array $user = ['matricule' => '00017', 'nom_prenom' => 'Compte test'];
     public array $profiles = ['RESPONSABLE'];
     public ?string $store;
+    private array $referentials;
+    private ?string $reference = null;
 
     public function __construct(?string $store = null)
     {
+        $this->referentials = preview_reference_data();
         $this->store = $store;
         if ($store && is_file($store)) {
             $state = json_decode(file_get_contents($store), true, 512, JSON_THROW_ON_ERROR);
@@ -64,6 +69,16 @@ class FakeDatabase extends PDO
     public function inTransaction(): bool { return $this->active; }
     public function lastInsertId(?string $name = null): string|false { return '41'; }
 
+    private function reference_row(string $table, mixed $id): ?array
+    {
+        foreach ($this->referentials[$table] as $row) {
+            if ((string) $row['id'] === (string) $id && $row['actif']) {
+                return $row;
+            }
+        }
+        return null;
+    }
+
     public function results(string $sql, array $values): array
     {
         $this->calls[] = [$sql, $values];
@@ -76,14 +91,36 @@ class FakeDatabase extends PDO
             $key = $this->previous ? json_decode($this->previous['nouvelles_valeurs'], true)['_submission']['key'] : null;
             return $key === $values[1] ? [$this->previous] : [];
         }
-        if (str_contains($sql, 'SELECT id, code, nom')) { return [['id' => 1, 'code' => 'PO', 'nom' => 'Politique']]; }
-        if (str_contains($sql, 'SELECT id, libelle')) { return [['id' => 1, 'libelle' => 'Autre']]; }
-        if (str_contains($sql, 'SELECT id FROM') || str_contains($sql, 'SELECT p.matricule')) { return $this->referencesValid ? [['id' => 1, 'matricule' => '00017', 'nom_prenom' => 'Compte test']] : []; }
-        if (str_contains($sql, 'CALL generer_reference')) { return []; }
+        if (preg_match('/^SELECT id(?:, code, nom|, libelle)? FROM (processus|types_nc|natures_service) WHERE /D', $sql, $match)) {
+            if (str_contains($sql, 'WHERE id=?')) {
+                $row = $this->referencesValid ? $this->reference_row($match[1], $values[0]) : null;
+                return $row ? [$row] : [];
+            }
+            if (str_contains($sql, 'WHERE actif=TRUE ORDER BY id')) {
+                return $this->referentials[$match[1]];
+            }
+        }
+        if (str_contains($sql, 'SELECT p.matricule')) {
+            if (!$this->referencesValid || str_contains($sql, '0=1') || str_contains($sql, 'processus_responsable')) {
+                return [];
+            }
+            if (str_contains($sql, 'WHERE p.matricule=?') && ($values[0] ?? null) !== $this->user['matricule']) {
+                return [];
+            }
+            return [$this->user];
+        }
+        if (str_contains($sql, 'CALL generer_reference')) {
+            $process = $this->reference_row('processus', $values[1]);
+            if (!$process || !$this->referencesValid) {
+                throw new PDOException('Processus inexistant ou inactif');
+            }
+            $this->reference = sprintf('%s-%s-%03d-%s', $values[0], $process['code'], $this->number, substr($values[2], 2, 2));
+            return [];
+        }
         if (str_contains($sql, 'SELECT derniere_valeur')) { return [[$this->number]]; }
-        if (str_contains($sql, 'SELECT @anrt_reference')) { return [['NC-PO-001-26']]; }
+        if (str_contains($sql, 'SELECT @anrt_reference')) { return [[$this->reference]]; }
         if (str_contains($sql, 'INSERT INTO non_conformites')) { $this->insert = $values; return []; }
-        if (str_contains($sql, 'SELECT * FROM non_conformites')) { return [['id' => 41, 'reference' => 'NC-PO-001-26', 'description' => $this->insert[5]]]; }
+        if (str_contains($sql, 'SELECT * FROM non_conformites')) { return [['id' => 41, 'reference' => $this->insert[0], 'description' => $this->insert[5]]]; }
         if (str_contains($sql, 'INSERT INTO journal_audit')) {
             if ($this->failAudit) { throw new PDOException('Erreur audit injectée'); }
             $this->audit = $values;

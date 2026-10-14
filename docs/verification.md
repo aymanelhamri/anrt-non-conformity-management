@@ -9,8 +9,8 @@ déclaration ou déconnexion. Ils ont été exécutés avec les outils de `.tool
 | Commande / scénario | Résultat réellement obtenu |
 | --- | --- |
 | `composer validate --strict` | Manifest et verrou valides. |
-| `composer test` | **62 tests PHP locaux**, **41 contrôles HTTP avec PDO instrumenté** et **14 contrôles HTTP via le point d'entrée public**, tous réussis. |
-| `php -l` sur les 21 fichiers PHP | Aucune erreur de syntaxe. |
+| `composer test` | **69 tests PHP locaux**, **45 contrôles HTTP avec PDO instrumenté** et **14 contrôles HTTP via le point d'entrée public**, tous réussis. |
+| `php -l` sur les 22 fichiers PHP | Aucune erreur de syntaxe. |
 | `git diff --check` | Aucune erreur ; avis de conversion LF/CRLF Windows uniquement. |
 | Comparaison des scripts SQL et de `docs/modele-donnees.md` | Aucun changement. |
 
@@ -19,6 +19,11 @@ liée à la session, son indisponibilité avant création ou après reconnexion,
 et le refus des anciennes routes de consultation, même pour un compte connecté.
 Ils exécutent de vrais serveurs PHP locaux, avec un PDO instrumenté pour les
 opérations métier : ils ne prouvent pas leur stockage réel ni l'atomicité MySQL.
+
+Les listes de l'aperçu reprennent les 12 processus, 8 types de NC et 16 natures
+de service du script SQL existant. Les tests vérifient les libellés, le refus
+des choix inexistants et la référence du processus choisi dans la confirmation,
+l'audit et les réessais. Le responsable reste explicitement un compte de test.
 
 Les **12 cas MySQL** adaptés au premier parcours sont préparés mais n'ont pas
 été exécutés. La procédure, les contraintes, les transactions et la concurrence

@@ -71,6 +71,15 @@ Ouvrir `http://127.0.0.1:5000`. Le mode démo utilise le matricule comme
 identifiant et des permissions techniques d'essai ; il ne confirme aucune
 règle métier. MySQL et les comptes de recette restent nécessaires.
 
+L'aperçu local sans MySQL, lancé avec `tests/http_router.php`, reprend les
+12 processus, 8 types de NC et 16 natures de service du script
+`database/002_seed_referentiels.sql`, extrait du classeur fourni. Ces listes
+ne sont pas dupliquées dans le code de démonstration. Les identifiants de
+l'aperçu suivent l'ordre du script ; les identifiants de la base réelle
+peuvent être différents. Le responsable reste le compte de test `00017` :
+les noms et matricules réels doivent provenir des données RH autorisées.
+Les enregistrements de cet aperçu restent simulés.
+
 Hors démonstration, configurer `LOGIN_IDENTIFIER=matricule`, un
 `PERMISSIONS_FILE` contenant les droits de création et d'affectation approuvés,
 puis `NC_INITIAL_RULES_CONFIRMED=true` après confirmation des règles de saisie.

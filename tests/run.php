@@ -165,6 +165,43 @@ $tests['SQL contrôle début, fin et profils'] = function (): void {
     $pdo->accountValid = false;
     check(load_user($pdo, '00017') === null);
 };
+$tests['Choix du formulaire issus des référentiels SQL'] = function () use ($config, $user): void {
+    $choices = nc_choices(new FakeDatabase(), $config, $user);
+    check(count($choices['processus']) === 12 && count($choices['types_nc']) === 8 && count($choices['natures_service']) === 16);
+    check($choices['processus'][0]['nom'] === 'Politique & Objectifs');
+    check($choices['processus'][9]['code'] === 'SI' && $choices['processus'][9]['nom'] === 'Système d’information');
+    check($choices['types_nc'][0]['libelle'] === 'Délai de traitement non conforme');
+    check($choices['types_nc'][7]['libelle'] === '[ALERTE] Gestion des exceptions (Serveur Facturation/Recouvrement)');
+    check($choices['natures_service'][0]['libelle'] === 'Assignation de fréquences');
+    check($choices['natures_service'][15]['libelle'] === 'Autre');
+    check($choices['responsables'] === [['matricule' => '00017', 'nom_prenom' => 'Compte test']]);
+};
+$tests['Extraction SQL : apostrophes doublées et source invalide'] = function (): void {
+    $source = file_get_contents(dirname(__DIR__) . '/database/002_seed_referentiels.sql');
+    $escaped = str_replace("'Politique & Objectifs'", "'Politique d''objectifs (ANRT), qualité'", $source);
+    check(parse_preview_reference_data($escaped)['processus'][0]['nom'] === "Politique d'objectifs (ANRT), qualité");
+    rejects(fn() => parse_preview_reference_data(str_replace('INSERT INTO types_nc', 'INSERT INTO autre_table', $source)), RuntimeException::class);
+    rejects(fn() => parse_preview_reference_data(str_replace("'Politique & Objectifs'", "'Politique d'objectifs'", $source)), RuntimeException::class);
+};
+foreach (['processus_id', 'type_nc_id', 'nature_service_id', 'responsable_matricule'] as $field) {
+    $tests['Choix inconnu refusé en aperçu : ' . $field] = function () use ($config, $user, $values, $field): void {
+        $pdo = new FakeDatabase();
+        rejects(fn() => create_nc($pdo, $config, $user, [...$values, $field => '999999'], new_submission($user, $config), null));
+        check($pdo->insert === null && $pdo->transactions === ['begin', 'rollback']);
+    };
+}
+$tests['Référence du processus choisi, audit et réessai'] = function () use ($config, $user, $values): void {
+    $pdo = new FakeDatabase();
+    $values['processus_id'] = '10';
+    $token = new_submission($user, $config);
+    $expected = 'NC-SI-001-' . substr(business_today($config), 2, 2);
+    check(create_nc($pdo, $config, $user, $values, $token, null) === [41, false, $expected]);
+    check($pdo->insert[0] === $expected && json_decode($pdo->audit[2], true)['reference'] === $expected);
+    $pdo->previous = ['entite_id' => '41', 'nouvelles_valeurs' => $pdo->audit[2]];
+    check(create_nc($pdo, $config, $user, $values, $token, null) === [41, true, $expected]);
+    query($pdo, 'CALL generer_reference(?, ?, ?, @anrt_reference)', ['NC', 10, '2031-04-05']);
+    check(query($pdo, 'SELECT @anrt_reference')->fetchColumn() === 'NC-SI-001-31');
+};
 $tests['Création, une connexion, ordre et audit'] = function () use ($config, $user, $values): void {
     $pdo = new FakeDatabase();
     check(create_nc($pdo, $config, $user, $values, new_submission($user, $config), '127.0.0.1') === [41, false, 'NC-PO-001-26']);
