@@ -7,3 +7,4 @@ instance/
 .coverage
 .tools/
 vendor/
+debug.log
