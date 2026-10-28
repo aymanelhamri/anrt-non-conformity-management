@@ -1,6 +1,13 @@
 {
+  "ADMINISTRATEUR": {
+    "create": true,
+    "assign": "all",
+    "admin_view": true,
+    "edit": "all"
+  },
   "RESPONSABLE": {
     "create": true,
-    "assign": "self"
+    "assign": "self",
+    "edit": "related"
   }
 }

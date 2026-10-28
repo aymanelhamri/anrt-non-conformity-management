@@ -1,16 +1,17 @@
 <?php
-$title = 'Nouvelle non-conformité · ANRT';
+$editing = $editing ?? false;
+$title = $editing ? 'Modifier ' . $nc['reference'] . ' · ANRT' : 'Nouvelle non-conformité · ANRT';
 $fieldError = static function (string $name) use ($errors): string {
     return isset($errors[$name]) ? '<p class="field-error" id="' . e($name) . '-error">' . e($errors[$name]) . '</p>' : '';
 };
 ?>
-<div class="page-heading"><div><p class="eyebrow">NOUVELLE DÉCLARATION</p><h1>Enregistrer une non-conformité</h1><p class="muted">Les champs marqués d’un * sont obligatoires.</p></div></div>
+<div class="page-heading"><div><p class="eyebrow"><?= $editing ? 'MODIFICATION' : 'NOUVELLE DÉCLARATION' ?></p><h1><?= $editing ? 'Modifier ' . e($nc['reference']) : 'Enregistrer une non-conformité' ?></h1><p class="muted">Les champs marqués d’un * sont obligatoires.<?= $editing ? ' Les modifications restent possibles tant que le dossier n’est pas clôturé ou terminé.' : '' ?></p></div></div>
 <?php if ($errors): ?>
     <div class="notice error" role="alert"><strong>Votre déclaration n’a pas pu être confirmée.</strong><p><?= e($errors['form'] ?? 'Vérifiez les champs indiqués. Votre saisie a été conservée.') ?></p></div>
 <?php endif; ?>
 <form method="post" class="nc-form" data-nc-form>
     <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-    <input type="hidden" name="submission_token" value="<?= e($submission) ?>">
+    <?php if ($editing): ?><input type="hidden" name="version_token" value="<?= e($version) ?>"><?php else: ?><input type="hidden" name="submission_token" value="<?= e($submission) ?>"><?php endif; ?>
     <section class="card form-section">
         <h2><span class="step">1</span>Qualification</h2>
         <div class="grid three">
@@ -19,6 +20,7 @@ $fieldError = static function (string $name) use ($errors): string {
                 'type_nc_id' => ['Type de non-conformité', 'types_nc', 'libelle'],
                 'nature_service_id' => ['Nature de service', 'natures_service', 'libelle'],
             ] as $name => [$label, $table, $textField]): ?>
+                <?php if ($editing && $name === 'processus_id'): ?><div><p class="muted">Processus</p><strong><?= e($nc['processus_code'] . ' · ' . $nc['processus_nom']) ?></strong><p class="muted">Conservé avec la référence.</p></div><?php continue; endif; ?>
                 <div><label for="<?= e($name) ?>"><?= e($label) ?> <span aria-hidden="true">*</span></label>
                     <select id="<?= e($name) ?>" name="<?= e($name) ?>" required <?= isset($errors[$name]) ? 'aria-invalid="true" aria-describedby="' . e($name) . '-error"' : '' ?>>
                         <option value="">Sélectionnez…</option>
@@ -63,9 +65,9 @@ $fieldError = static function (string $name) use ($errors): string {
         <?= $fieldError('traitement') ?>
     </section>
     <section class="creation-info">
-        <span>Déclarant : <strong><?= e($user['nom_prenom'] ?: $user['matricule']) ?></strong></span>
+        <span>Déclarant : <strong><?= e($editing ? ($nc['declarant_nom'] ?: $nc['enregistree_par_matricule']) : ($user['nom_prenom'] ?: $user['matricule'])) ?></strong></span>
         <span>Date de création : <strong><?= e(display_date($today)) ?></strong></span>
-        <span>Statut initial : <strong>Ouverte</strong></span><span>La référence sera attribuée à l’enregistrement.</span>
+        <span>Statut<?= $editing ? '' : ' initial' ?> : <strong><?= e($editing ? $nc['statut_libelle'] : 'Ouverte') ?></strong></span><span><?= $editing ? 'La référence et le statut sont conservés.' : 'La référence sera attribuée à l’enregistrement.' ?></span>
     </section>
-    <div class="form-actions"><a class="button quiet" href="/non-conformites/nouvelle" data-cancel>Recommencer</a><button class="button primary" type="submit" data-submit>Enregistrer la non-conformité</button></div>
+    <div class="form-actions"><a class="button quiet" href="<?= $editing ? '/non-conformites/' . e($nc['id']) : '/non-conformites/nouvelle' ?>" data-cancel><?= $editing ? 'Annuler' : 'Recommencer' ?></a><button class="button primary" type="submit" data-submit><?= $editing ? 'Enregistrer les modifications' : 'Enregistrer la non-conformité' ?></button></div>
 </form>

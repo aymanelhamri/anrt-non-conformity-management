@@ -1,6 +1,7 @@
 "use strict";
 const form = document.querySelector("[data-nc-form]");
 if (form) {
+  const submitLabel = form.querySelector('[data-submit]').textContent;
   let changed = false;
   let sending = false;
   form.addEventListener("input", () => { changed = true; });
@@ -21,6 +22,6 @@ if (form) {
     sending = false;
     const button = form.querySelector("[data-submit]");
     button.disabled = false;
-    button.textContent = "Enregistrer la non-conformité";
+    button.textContent = submitLabel;
   });
 }

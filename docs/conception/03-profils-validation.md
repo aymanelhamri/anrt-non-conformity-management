@@ -19,5 +19,8 @@ Les contrôles sont exécutés sur le serveur. Sans permission configurée,
 la création est refusée. Le mode de démonstration fournit des droits d'essai
 explicites ; ils ne constituent pas une matrice métier approuvée.
 
-`personnel_validation` est conservée dans le modèle RH. Aucun circuit de
-validation de dossier n'est défini dans ce premier parcours.
+L'extension du 28 octobre ajoute la consultation, la modification avant clôture
+et la validation par les personnes désignées dans `personnel_validation`.
+Voir les périmètres et limites dans le [guide de suivi](../suivi-non-conformites.md).
+Les niveaux RH sont affichés ; aucun ordre de validation entre niveaux n'est
+imposé sans règle métier confirmée.

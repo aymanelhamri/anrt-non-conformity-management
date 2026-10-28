@@ -76,13 +76,13 @@ function test_http(bool $instrumented): int
             [$status] = http_call($port, $path, $cookies);
             http_check($status === 404, 'Fichier privé exposé'); $tests++;
         }
-        foreach (['/non-conformites/nouvelle', '/non-conformites/confirmation'] as $path) {
+        foreach (['/non-conformites/nouvelle', '/non-conformites/confirmation', '/administration', '/administration/journal', '/non-conformites', '/non-conformites/1', '/non-conformites/1/modifier', '/notifications'] as $path) {
             [$status, $headers] = http_call($port, $path, $cookies);
             http_check($status === 302 && str_contains($headers, 'Location: /connexion'), 'Accès sans authentification'); $tests++;
         }
-        foreach (['/non-conformites', '/non-conformites/1'] as $path) {
+        foreach (['/non-conformites/inconnu', '/mon-activite'] as $path) {
             [$status] = http_call($port, $path, $cookies);
-            http_check($status === 404, 'Ancienne consultation indisponible'); $tests++;
+            http_check($status === 404, 'Route inconnue refusée'); $tests++;
         }
         [$status] = http_call($port, '/connexion', $cookies, 'matricule=00017&password=secret');
         http_check($status === 400, 'Connexion sans CSRF'); $tests++;
@@ -95,6 +95,10 @@ function test_http(bool $instrumented): int
         $payload = http_build_query(['csrf_token' => html_token($html, 'csrf_token'), 'matricule' => '00017', 'password' => 'Test-secret']);
         [$status, $headers] = http_call($port, '/connexion', $cookies, $payload);
         http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/nouvelle') && $cookies['anrt_session'] !== $beforeLogin, 'Connexion et rotation'); $tests++;
+        foreach (['/administration', '/administration/comptes', '/administration/non-conformites', '/administration/non-conformites/1', '/administration/journal?matricule=00018'] as $path) {
+            [$status] = http_call($port, $path, $cookies);
+            http_check($status === 403, 'Administration interdite au compte responsable'); $tests++;
+        }
         [$status, $headers] = http_call($port, '/non-conformites/confirmation?reference=NC-SECRET&id=99', $cookies);
         http_check($status === 303 && str_contains($headers, 'Location: /non-conformites/nouvelle'), 'Confirmation inaccessible sans création en session'); $tests++;
         [$status, , $html] = http_call($port, '/non-conformites/nouvelle', $cookies);
@@ -120,10 +124,12 @@ function test_http(bool $instrumented): int
         [$status, , $html] = http_call($port, '/non-conformites/confirmation?reference=NC-SECRET&id=99', $cookies);
         $expectedReference = 'NC-SI-001-' . (new DateTimeImmutable('now', new DateTimeZone($environment['APP_TIMEZONE'] ?? 'Africa/Casablanca')))->format('y');
         http_check($status === 200 && str_contains($html, 'Votre non-conformité a été enregistrée.') && str_contains($html, $expectedReference) && !str_contains($html, 'NC-SECRET'), 'Confirmation de la référence du processus choisi'); $tests++;
-        foreach (['/non-conformites?reference=NC-PO', '/non-conformites/41', '/non-conformites/99'] as $path) {
+        foreach (['/non-conformites/0', '/non-conformites/4294967296'] as $path) {
             [$status] = http_call($port, $path, $cookies);
-            http_check($status === 404, 'Consultation retirée même après connexion'); $tests++;
+            http_check($status === 404, 'Identifiant de dossier hors limites refusé'); $tests++;
         }
+        [$status] = http_call($port, '/non-conformites?matricule=00018', $cookies);
+        http_check($status === 400, 'Le périmètre ne peut pas être choisi dans l’URL'); $tests++;
         [$status] = http_call($port, '/non-conformites/nouvelle', $cookies, http_build_query($payload));
         http_check($status === 303, 'Double soumission'); $tests++;
         [$status, , $html] = http_call($port, '/non-conformites/confirmation', $cookies);

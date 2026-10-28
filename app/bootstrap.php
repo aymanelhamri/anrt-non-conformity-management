@@ -7,6 +7,9 @@ require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/non_conformites.php';
 require_once __DIR__ . '/web.php';
+require_once __DIR__ . '/admin.php';
+require_once __DIR__ . '/notifications.php';
+require_once __DIR__ . '/nc_suivi.php';
 
 function bootstrap(): array
 {

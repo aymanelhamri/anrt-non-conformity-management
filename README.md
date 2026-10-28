@@ -3,19 +3,26 @@
 Application web de stage en **PHP 8.3+ et PDO MySQL**, pour digitaliser la
 gestion des non-conformités à l'ANRT.
 
-Le parcours actuel est limité à : **connexion → formulaire de non-conformité
+Le parcours de déclaration comprend : **connexion → formulaire de non-conformité
 → contrôles serveur → enregistrement → confirmation de la référence**.
 La confirmation concerne uniquement la déclaration qui vient d'être créée
-dans la session. L'utilisateur peut ensuite effectuer une autre déclaration
-ou se déconnecter.
+dans la session. Le menu **Mes non-conformités** permet ensuite de suivre ses
+dossiers par statut et de les modifier avant leur première validation ou clôture.
+Le [guide de suivi](docs/suivi-non-conformites.md) explique la validation RH,
+l'historique et les notifications dans l'application.
+
+Un [espace administrateur](docs/administration.md) permet aussi de consulter
+tous les comptes, toutes les non-conformités et le journal d'activité, avec
+des filtres par compte. Les connexions et déconnexions y sont tracées depuis
+l'activation de ce suivi.
 
 La création conserve un audit technique dans la base et protège les réessais
 du même formulaire contre les doubles enregistrements. Les droits non
 configurés sont refusés par défaut.
 
-Le projet global prévoit aussi les actions d'amélioration, les validations,
-les notifications, les tableaux de bord et le suivi. Leur fonctionnement
-et leur ordre de développement restent à définir avec la superviseure.
+Le projet global prévoit aussi les actions d'amélioration, les tableaux de bord
+et les étapes de clôture. Leur fonctionnement et leur ordre de développement
+restent à définir avec la superviseure.
 
 ## Conception et base de données
 
@@ -29,6 +36,9 @@ réutilisent les tables RH existantes, avec le matricule comme identifiant.
 Les scripts SQL antérieurs sont conservés sans modification.
 
 ## Démarrer
+
+Pour utiliser la petite base de test locale déjà préparée sur ce poste, voir
+le [guide d'authentification locale](docs/authentification-locale.md).
 
 PHP 64 bits, extensions `pdo_mysql` et `mbstring`, Composer et MySQL 8.0.16+
 sont nécessaires. Aucun paquet PHP tiers n'est utilisé.

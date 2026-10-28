@@ -16,6 +16,8 @@ class FakeDatabase extends PDO
     public int $number = 1;
     public ?array $previous = null;
     public ?array $audit = null;
+    public array $authLogs = [];
+    public array $notifications = [];
     public ?array $insert = null;
     public array $user = ['matricule' => '00017', 'nom_prenom' => 'Compte test'];
     public array $profiles = ['RESPONSABLE'];
@@ -31,6 +33,7 @@ class FakeDatabase extends PDO
             $state = json_decode(file_get_contents($store), true, 512, JSON_THROW_ON_ERROR);
             $this->insert = $state['insert'];
             $this->audit = $state['audit'];
+            $this->notifications = $state['notifications'] ?? [];
             $this->previous = ['entite_id' => '41', 'nouvelles_valeurs' => $this->audit[2]];
         }
     }
@@ -51,7 +54,7 @@ class FakeDatabase extends PDO
         $this->transactions[] = 'commit';
         $this->active = false;
         if ($this->store) {
-            file_put_contents($this->store, json_encode(['insert' => $this->insert, 'audit' => $this->audit], JSON_THROW_ON_ERROR));
+            file_put_contents($this->store, json_encode(['insert' => $this->insert, 'audit' => $this->audit, 'notifications' => $this->notifications], JSON_THROW_ON_ERROR));
         }
         if ($this->loseCommitResponse) {
             throw new PDOException('Réponse perdue après commit');
@@ -82,9 +85,21 @@ class FakeDatabase extends PDO
     public function results(string $sql, array $values): array
     {
         $this->calls[] = [$sql, $values];
+        if ($sql === 'SELECT COUNT(*) FROM notifications WHERE destinataire_matricule=? AND lue_le IS NULL') {
+            return [[count(array_filter($this->notifications, fn(array $row): bool => $row[0] === $values[0] && ($row[5] ?? null) === null))]];
+        }
         if (str_contains($sql, 'GET_LOCK')) { return [[1]]; }
         if (str_contains($sql, 'RELEASE_LOCK')) { return [[1]]; }
         if (str_contains($sql, 'SELECT passe')) { return [['passe' => password_hash('Test-secret', PASSWORD_BCRYPT)]]; }
+        if (str_starts_with($sql, 'SELECT matricule FROM pers WHERE matricule=?')) {
+            return ($values[0] ?? null) === $this->user['matricule'] ? [['matricule' => $this->user['matricule']]] : [];
+        }
+        if (str_contains($sql, "VALUES (?,?,'acces',?,?,?)")) {
+            if ($this->failAudit) { throw new PDOException('Erreur audit injectée'); }
+            $this->authLogs[] = $values;
+            return [];
+        }
+        if (str_contains($sql, 'SELECT DISTINCT a.matricule FROM acces a JOIN acces_profil')) { return []; }
         if (str_contains($sql, 'FROM acces a')) { return $this->accountValid ? [$this->user] : []; }
         if (str_contains($sql, 'FROM acces_profil')) { return array_map(fn(string $p): array => ['profil_code' => $p], $this->profiles); }
         if (str_contains($sql, 'SELECT entite_id')) {
@@ -120,7 +135,12 @@ class FakeDatabase extends PDO
         if (str_contains($sql, 'SELECT derniere_valeur')) { return [[$this->number]]; }
         if (str_contains($sql, 'SELECT @anrt_reference')) { return [[$this->reference]]; }
         if (str_contains($sql, 'INSERT INTO non_conformites')) { $this->insert = $values; return []; }
-        if (str_contains($sql, 'SELECT * FROM non_conformites')) { return [['id' => 41, 'reference' => $this->insert[0], 'description' => $this->insert[5]]]; }
+        if (str_contains($sql, 'SELECT * FROM non_conformites')) { return [[
+            'id' => 41, 'reference' => $this->insert[0], 'description' => $this->insert[5],
+            'enregistree_par_matricule' => $this->insert[4], 'responsable_matricule' => $this->insert[7], 'statut_code' => 'OUVERTE',
+        ]]; }
+        if (str_contains($sql, 'SELECT DISTINCT mat_val FROM personnel_validation')) { return []; }
+        if (str_contains($sql, 'INSERT INTO notifications')) { $this->notifications[] = $values; return []; }
         if (str_contains($sql, 'INSERT INTO journal_audit')) {
             if ($this->failAudit) { throw new PDOException('Erreur audit injectée'); }
             $this->audit = $values;

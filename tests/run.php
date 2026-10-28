@@ -119,6 +119,42 @@ $tests['Clé signée et liée à l’acteur'] = function () use ($user, $config)
     rejects(fn() => submission_key($token, '17', $config), FormError::class, 400);
     rejects(fn() => submission_key($token . 'x', '00017', $config), FormError::class, 400);
 };
+$tests['Consultation globale réservée aux droits explicites'] = function () use ($user, $config): void {
+    $admin = [...$user, 'profiles' => ['ADMINISTRATEUR']];
+    check(can_admin($admin, $config));
+    check(!can_admin($user, $config));
+    check(!can_admin($admin, [...$config, 'permissions' => []]));
+    check(!can_admin($admin, [...$config, 'permissions' => ['ADMINISTRATEUR' => ['create' => true, 'assign' => 'all']]]));
+    rejects(fn() => validate_policy(['ADMINISTRATEUR' => ['admin_view' => 'true']]), RuntimeException::class);
+};
+$tests['Filtres administrateur refusent tableaux et valeurs invalides'] = function (): void {
+    foreach ([['page' => '0'], ['page' => '-1'], ['matricule' => ['00017']], ['operation' => "' OR 1=1"], ['nc_id' => '0'], ['inconnu' => 'x']] as $input) {
+        rejects(fn() => admin_filters($input), HttpError::class, 400);
+    }
+    check(admin_filters(['matricule' => '00017'])['matricule'] === '00017');
+    check(admin_pagination(21, 999)['page'] === 2);
+};
+$tests['Journal de connexion sans mot de passe ni session'] = function (): void {
+    $pdo = new FakeDatabase();
+    record_auth_event($pdo, '00017', 'CONNEXION', '127.0.0.1');
+    check(count($pdo->authLogs) === 1 && $pdo->authLogs[0][0] === '00017');
+    check(json_decode($pdo->authLogs[0][3], true) === ['matricule' => '00017']);
+    record_auth_event($pdo, 'inconnu', 'CONNEXION_REFUSEE', 'invalid-ip', 'Identifiants refusés.');
+    check($pdo->authLogs[1][0] === null && $pdo->authLogs[1][4] === null);
+    rejects(fn() => record_auth_event($pdo, '00017', 'MODIFICATION', null), InvalidArgumentException::class);
+};
+$tests['Un échec de journalisation est remonté'] = function (): void {
+    $pdo = new FakeDatabase();
+    $pdo->failAudit = true;
+    rejects(fn() => record_auth_event($pdo, '00017', 'CONNEXION', null), PDOException::class);
+};
+$tests['Détails du journal excluent les champs techniques et secrets'] = function (): void {
+    $details = admin_log_details(['entite' => 'non_conformites', 'nouvelles_valeurs' => json_encode([
+        'description' => '<script>texte</script>', '_submission' => ['key' => 'secret'], 'passe' => 'hash', 'password' => 'secret',
+    ], JSON_THROW_ON_ERROR)]);
+    check($details === ['Description' => '<script>texte</script>']);
+    check(e($details['Description']) === '&lt;script&gt;texte&lt;/script&gt;');
+};
 $tests['CSRF et échappement HTML'] = function (): void {
     $_SESSION = [];
     $token = csrf_token();
@@ -252,6 +288,39 @@ $tests['Refus métier avant transaction'] = function () use ($config, $user, $va
         rejects(fn() => create_nc($pdo, [...$config, ...$override], $user, $values, new_submission($user, $config), null), FormError::class, 403);
         check($pdo->calls === []);
     }
+};
+
+$tests['Modification : droits explicites et dossiers terminés'] = function () use ($config, $user): void {
+    $nc = ['id' => 41, 'enregistree_par_matricule' => '00017', 'responsable_matricule' => '00018', 'date_cloture' => null, 'statut_code' => 'OUVERTE', 'est_final' => 0];
+    check(nc_can_edit($nc, $user, $config));
+    check(!nc_can_edit($nc, [...$user, 'matricule' => '00019'], $config));
+    check(!nc_can_edit($nc, $user, [...$config, 'permissions' => []]));
+    foreach ([['est_final' => 1], ['statut_code' => 'CLOTUREE'], ['date_cloture' => '2026-10-28'], ['deja_validee' => true]] as $override) {
+        check(!nc_can_edit([...$nc, ...$override], $user, $config));
+        check(!nc_can_edit([...$nc, ...$override], [...$user, 'profiles' => ['ADMINISTRATEUR']], $config));
+    }
+};
+$tests['Jeton de version lié au dossier, au contenu et au compte'] = function () use ($config, $user, $values): void {
+    $nc = [...$values, 'id' => 41, 'revision' => 1];
+    $token = nc_version($nc, $user, $config);
+    check($token !== nc_version([...$nc, 'revision' => 2], $user, $config));
+    check($token !== nc_version([...$nc, 'description' => 'Autre'], $user, $config));
+    check($token !== nc_version($nc, [...$user, 'matricule' => '00018'], $config));
+};
+$tests['Filtres NC : aucune identité reçue du navigateur'] = function (): void {
+    check(nc_filters([]) === ['statut' => '', 'page' => 1]);
+    foreach ([['matricule' => '00018'], ['page' => '0'], ['page' => []], ['statut' => '<script>']] as $input) {
+        rejects(fn() => nc_filters($input), HttpError::class, 400);
+    }
+};
+$tests['Notifications de création dédoublonnées et absentes au réessai'] = function () use ($config, $user, $values): void {
+    $pdo = new FakeDatabase();
+    $token = new_submission($user, $config);
+    create_nc($pdo, $config, $user, $values, $token, null);
+    check(count($pdo->notifications) === 1 && $pdo->notifications[0][0] === '00017' && $pdo->notifications[0][2] === 'NC_CREATION');
+    $pdo->previous = ['entite_id' => '41', 'nouvelles_valeurs' => $pdo->audit[2]];
+    create_nc($pdo, $config, $user, $values, $token, null);
+    check(count($pdo->notifications) === 1);
 };
 
 $failures = 0;

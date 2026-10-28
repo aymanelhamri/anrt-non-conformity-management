@@ -35,5 +35,7 @@ L'échéance est nullable dans le schéma ; son obligation reste à décider.
 Les profils autorisés et le choix du responsable restent également à confirmer.
 Voir les [questions du formulaire](06-decisions.md).
 
-Le projet global mentionne aussi les actions, les validations, les notifications
-et le pilotage. Leur processus et leur mise en œuvre ne sont pas définis ici.
+Le projet global mentionne aussi les actions et le pilotage. L'extension du
+28 octobre ajoute le suivi des NC, la modification avant clôture, la validation
+RH et les notifications dans l'application ; voir le
+[guide de suivi](../suivi-non-conformites.md) pour les règles retenues et les limites.

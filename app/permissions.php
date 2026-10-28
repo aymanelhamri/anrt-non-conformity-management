@@ -5,8 +5,8 @@ function demo_policy(): array
 {
     // Recette technique seulement ; aucun droit confirmé par cette démonstration.
     return [
-        'ADMINISTRATEUR' => ['create' => true, 'assign' => 'all'],
-        'RESPONSABLE' => ['create' => true, 'assign' => 'self'],
+        'ADMINISTRATEUR' => ['create' => true, 'assign' => 'all', 'admin_view' => true, 'edit' => 'all'],
+        'RESPONSABLE' => ['create' => true, 'assign' => 'self', 'edit' => 'related'],
     ];
 }
 
@@ -17,14 +17,20 @@ function validate_policy(mixed $policy): void
     }
     foreach ($policy as $profile => $rule) {
         if (!is_string($profile) || strlen($profile) > 30 || !is_array($rule)
-            || array_diff(array_keys($rule), ['create', 'assign'])) {
+            || array_diff(array_keys($rule), ['create', 'assign', 'admin_view', 'edit'])) {
             throw new RuntimeException('Profil ou permission invalide.');
         }
         if (array_key_exists('create', $rule) && !is_bool($rule['create'])) {
             throw new RuntimeException('create doit être un booléen.');
         }
+        if (array_key_exists('admin_view', $rule) && !is_bool($rule['admin_view'])) {
+            throw new RuntimeException('admin_view doit être un booléen.');
+        }
         if (!in_array($rule['assign'] ?? null, [null, 'self', 'all', 'process'], true)) {
             throw new RuntimeException("Périmètre d'affectation inconnu.");
+        }
+        if (!in_array($rule['edit'] ?? null, [null, 'related', 'all'], true)) {
+            throw new RuntimeException('Périmètre de modification inconnu.');
         }
     }
 }
@@ -44,6 +50,18 @@ function can_create(array $user, array $config): bool
 {
     foreach (user_rules($user, $config) as $rule) {
         if (($rule['create'] ?? false) === true) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// La consultation globale exige une permission explicite. Le nom d'un profil
+// seul ne donne aucun accès si la politique chargée ne lui accorde pas ce droit.
+function can_admin(array $user, array $config): bool
+{
+    foreach (user_rules($user, $config) as $rule) {
+        if (($rule['admin_view'] ?? false) === true) {
             return true;
         }
     }

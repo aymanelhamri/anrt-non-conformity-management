@@ -31,9 +31,11 @@ Réutiliser `pers`, `acces`, `acces_profil` et les affectations existantes.
 Aucun compte n'est créé au démarrage.
 
 Le compte applicatif a besoin de `SELECT` sur les tables consultées,
-`INSERT` sur `non_conformites` et `journal_audit`, et `EXECUTE` sur
-`generer_reference`. Le définisseur de la procédure doit pouvoir modifier
-les compteurs.
+`INSERT` sur `non_conformites`, `journal_audit` et `notifications`, `UPDATE` sur
+les six champs modifiables de `non_conformites` et sur `notifications.lue_le`,
+et `EXECUTE` sur `generer_reference`. Les droits détaillés sont décrits dans le
+[guide de suivi](suivi-non-conformites.md). Le définisseur de la procédure doit
+pouvoir modifier les compteurs.
 
 Générer le hash d'un mot de passe de recette sans le passer en argument :
 

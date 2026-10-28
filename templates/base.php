@@ -12,7 +12,11 @@
     <a class="brand" href="/"><span class="brand-mark">A</span><span>ANRT <small>Gestion de la qualité</small></span></a>
     <?php if ($user): ?>
         <nav aria-label="Navigation principale">
-            <a href="/non-conformites/nouvelle">Nouvelle déclaration</a>
+            <?php if (can_admin($user, $config)): ?><a href="/administration">Administration</a><?php endif; ?>
+            <a href="/non-conformites"><?= can_admin($user, $config) ? 'Non-conformités' : 'Mes non-conformités' ?></a>
+            <?php $unreadCount = (int) ($user['unread_notifications'] ?? 0); ?>
+            <a class="notification-link" href="/notifications" aria-label="<?= e('Notifications : ' . $unreadCount . ($unreadCount === 1 ? ' non lue' : ' non lues')) ?>">Notifications <span class="notification-count <?= $unreadCount === 0 ? 'empty' : '' ?>" aria-hidden="true">(<?= e($unreadCount) ?>)</span></a>
+            <?php if (can_create($user, $config)): ?><a href="/non-conformites/nouvelle">Nouvelle déclaration</a><?php endif; ?>
             <span class="identity"><?= e($user['nom_prenom'] ?: $user['matricule']) ?></span>
             <form method="post" action="/deconnexion">
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">

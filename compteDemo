@@ -1,0 +1,38 @@
+Comptes de démonstration
+
+Page de connexion : http://127.0.0.1:5000/connexion
+Base MySQL : anrt_auth_local
+
+Compte 1
+Nom : Amine Demo
+Matricule : 00020
+Mot de passe : Demo-Amine-2026!
+Profil : RESPONSABLE
+
+Compte 2
+Nom : Sara Demo
+Matricule : 00021
+Mot de passe : Demo-Sara-2026!
+Profil : RESPONSABLE
+
+Compte 3
+Nom : Youssef Demo
+Matricule : 00022
+Mot de passe : Demo-Youssef-2026!
+Profil : RESPONSABLE
+
+Compte administrateur
+Nom : Admin Demo
+Matricule : 00001
+Mot de passe : Demo-Admin-2026!
+Profil : ADMINISTRATEUR
+Espace : http://127.0.0.1:5000/administration
+Validation RH de démonstration : valide les déclarations de 00020, 00021 et 00022 (niveau 1).
+
+Suivi des dossiers : http://127.0.0.1:5000/non-conformites
+Notifications personnelles : http://127.0.0.1:5000/notifications
+
+Ces personnes sont fictives et leurs comptes sont actifs pour les essais locaux.
+Conserver les zéros au début des matricules lors de la connexion.
+Dans MySQL, les mots de passe sont enregistrés sous forme de hash Argon2id.
+Ce fichier sert uniquement à retrouver les identifiants de démonstration.
